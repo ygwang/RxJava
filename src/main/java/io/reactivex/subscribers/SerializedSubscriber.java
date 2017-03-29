@@ -14,6 +14,7 @@ package io.reactivex.subscribers;
 
 import org.reactivestreams.*;
 
+import io.reactivex.FlowableSubscriber;
 import io.reactivex.internal.subscriptions.SubscriptionHelper;
 import io.reactivex.internal.util.*;
 import io.reactivex.plugins.RxJavaPlugins;
@@ -21,14 +22,15 @@ import io.reactivex.plugins.RxJavaPlugins;
 /**
  * Serializes access to the onNext, onError and onComplete methods of another Subscriber.
  *
- * <p>Note that onSubscribe is not serialized in respect of the other methods so
- * make sure the Subscription is set before any of the other methods are called.
+ * <p>Note that {@link #onSubscribe(Subscription)} is not serialized in respect of the other methods so
+ * make sure the {@code onSubscribe} is called with a non-null {@code Subscription}
+ * before any of the other methods are called.
  *
  * <p>The implementation assumes that the actual Subscriber's methods don't throw.
  *
  * @param <T> the value type
  */
-public final class SerializedSubscriber<T> implements Subscriber<T>, Subscription {
+public final class SerializedSubscriber<T> implements FlowableSubscriber<T>, Subscription {
     final Subscriber<? super T> actual;
     final boolean delayError;
 

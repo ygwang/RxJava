@@ -27,6 +27,7 @@ import io.reactivex.internal.fuseable.*;
 import io.reactivex.observers.*;
 import io.reactivex.plugins.RxJavaPlugins;
 import io.reactivex.schedulers.Schedulers;
+import static org.mockito.Mockito.mock;
 
 public class UnicastSubjectTest {
 
@@ -67,6 +68,90 @@ public class UnicastSubjectTest {
         .assertOf(ObserverFusion.<Integer>assertFuseable())
         .assertOf(ObserverFusion.<Integer>assertFusionMode(QueueDisposable.ASYNC))
         .assertResult(1);
+    }
+
+    @Test
+    public void failFast() {
+        UnicastSubject<Integer> ap = UnicastSubject.create(false);
+        ap.onNext(1);
+        ap.onError(new RuntimeException());
+        TestObserver<Integer> ts = TestObserver.create();
+        ap.subscribe(ts);
+
+        ts
+                .assertValueCount(0)
+                .assertError(RuntimeException.class);
+    }
+
+    @Test
+    public void threeArgsFactoryFailFast() {
+        Runnable noop = mock(Runnable.class);
+        UnicastSubject<Integer> ap = UnicastSubject.create(16, noop, false);
+        ap.onNext(1);
+        ap.onError(new RuntimeException());
+        TestObserver<Integer> ts = TestObserver.create();
+        ap.subscribe(ts);
+
+        ts
+                .assertValueCount(0)
+                .assertError(RuntimeException.class);
+    }
+
+    @Test
+    public void threeArgsFactoryDelayError() {
+        Runnable noop = mock(Runnable.class);
+        UnicastSubject<Integer> ap = UnicastSubject.create(16, noop, true);
+        ap.onNext(1);
+        ap.onError(new RuntimeException());
+        TestObserver<Integer> ts = TestObserver.create();
+        ap.subscribe(ts);
+
+        ts
+                .assertValueCount(1)
+                .assertError(RuntimeException.class);
+    }
+
+    @Test
+    public void fusionOfflineFailFast() {
+        UnicastSubject<Integer> ap = UnicastSubject.create(false);
+        ap.onNext(1);
+        ap.onError(new RuntimeException());
+        TestObserver<Integer> ts = ObserverFusion.newTest(QueueDisposable.ANY);
+        ap.subscribe(ts);
+
+        ts
+                .assertValueCount(0)
+                .assertError(RuntimeException.class);
+    }
+
+    @Test
+    public void fusionOfflineFailFastMultipleEvents() {
+        UnicastSubject<Integer> ap = UnicastSubject.create(false);
+        ap.onNext(1);
+        ap.onNext(2);
+        ap.onNext(3);
+        ap.onComplete();
+        TestObserver<Integer> ts = ObserverFusion.newTest(QueueDisposable.ANY);
+        ap.subscribe(ts);
+
+        ts
+                .assertValueCount(3)
+                .assertComplete();
+    }
+
+    @Test
+    public void failFastMultipleEvents() {
+        UnicastSubject<Integer> ap = UnicastSubject.create(false);
+        ap.onNext(1);
+        ap.onNext(2);
+        ap.onNext(3);
+        ap.onComplete();
+        TestObserver<Integer> ts = TestObserver.create();
+        ap.subscribe(ts);
+
+        ts
+                .assertValueCount(3)
+                .assertComplete();
     }
 
     @Test
@@ -235,7 +320,7 @@ public class UnicastSubjectTest {
         try {
             p.onError(new TestException());
 
-            TestHelper.assertError(errors, 0, TestException.class);
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }
@@ -341,7 +426,7 @@ public class UnicastSubjectTest {
         try {
             us.onError(new TestException());
 
-            TestHelper.assertError(errors, 0, TestException.class);
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }

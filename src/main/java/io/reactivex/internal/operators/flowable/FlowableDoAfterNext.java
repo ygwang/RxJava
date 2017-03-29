@@ -13,9 +13,10 @@
 
 package io.reactivex.internal.operators.flowable;
 
-import org.reactivestreams.*;
+import org.reactivestreams.Subscriber;
 
-import io.reactivex.annotations.Experimental;
+import io.reactivex.Flowable;
+import io.reactivex.annotations.*;
 import io.reactivex.functions.Consumer;
 import io.reactivex.internal.fuseable.ConditionalSubscriber;
 import io.reactivex.internal.subscribers.*;
@@ -30,7 +31,7 @@ public final class FlowableDoAfterNext<T> extends AbstractFlowableWithUpstream<T
 
     final Consumer<? super T> onAfterNext;
 
-    public FlowableDoAfterNext(Publisher<T> source, Consumer<? super T> onAfterNext) {
+    public FlowableDoAfterNext(Flowable<T> source, Consumer<? super T> onAfterNext) {
         super(source);
         this.onAfterNext = onAfterNext;
     }
@@ -74,6 +75,7 @@ public final class FlowableDoAfterNext<T> extends AbstractFlowableWithUpstream<T
             return transitiveBoundaryFusion(mode);
         }
 
+        @Nullable
         @Override
         public T poll() throws Exception {
             T v = qs.poll();
@@ -122,6 +124,7 @@ public final class FlowableDoAfterNext<T> extends AbstractFlowableWithUpstream<T
             return transitiveBoundaryFusion(mode);
         }
 
+        @Nullable
         @Override
         public T poll() throws Exception {
             T v = qs.poll();

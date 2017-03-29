@@ -318,7 +318,7 @@ public class FlowableDoFinallyTest implements Action {
             .assertResult(1)
             .cancel();
 
-            TestHelper.assertError(errors, 0, TestException.class);
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }
@@ -340,7 +340,7 @@ public class FlowableDoFinallyTest implements Action {
             .assertResult(1)
             .cancel();
 
-            TestHelper.assertError(errors, 0, TestException.class);
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }
@@ -350,7 +350,7 @@ public class FlowableDoFinallyTest implements Action {
     public void clearIsEmpty() {
         Flowable.range(1, 5)
         .doFinally(this)
-        .subscribe(new Subscriber<Integer>() {
+        .subscribe(new FlowableSubscriber<Integer>() {
 
             @Override
             public void onSubscribe(Subscription s) {
@@ -397,7 +397,7 @@ public class FlowableDoFinallyTest implements Action {
         Flowable.range(1, 5)
         .doFinally(this)
         .filter(Functions.alwaysTrue())
-        .subscribe(new Subscriber<Integer>() {
+        .subscribe(new FlowableSubscriber<Integer>() {
 
             @Override
             public void onSubscribe(Subscription s) {

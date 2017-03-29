@@ -17,11 +17,12 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.reactivestreams.*;
 
+import io.reactivex.FlowableSubscriber;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.internal.disposables.DisposableHelper;
 import io.reactivex.internal.subscriptions.SubscriptionHelper;
 
-public final class SubscriberResourceWrapper<T> extends AtomicReference<Disposable> implements Subscriber<T>, Disposable, Subscription {
+public final class SubscriberResourceWrapper<T> extends AtomicReference<Disposable> implements FlowableSubscriber<T>, Disposable, Subscription {
 
     private static final long serialVersionUID = -8612022020200669122L;
 
@@ -35,21 +36,8 @@ public final class SubscriberResourceWrapper<T> extends AtomicReference<Disposab
 
     @Override
     public void onSubscribe(Subscription s) {
-        for (;;) {
-            Subscription current = subscription.get();
-            if (current == SubscriptionHelper.CANCELLED) {
-                s.cancel();
-                return;
-            }
-            if (current != null) {
-                s.cancel();
-                SubscriptionHelper.reportSubscriptionSet();
-                return;
-            }
-            if (subscription.compareAndSet(null, s)) {
-                actual.onSubscribe(this);
-                return;
-            }
+        if (SubscriptionHelper.setOnce(subscription, s)) {
+            actual.onSubscribe(this);
         }
     }
 
@@ -60,13 +48,13 @@ public final class SubscriberResourceWrapper<T> extends AtomicReference<Disposab
 
     @Override
     public void onError(Throwable t) {
-        dispose();
+        DisposableHelper.dispose(this);
         actual.onError(t);
     }
 
     @Override
     public void onComplete() {
-        dispose();
+        DisposableHelper.dispose(this);
         actual.onComplete();
     }
 

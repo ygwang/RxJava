@@ -13,17 +13,18 @@
 
 package io.reactivex.internal.operators.flowable;
 
-import io.reactivex.internal.functions.ObjectHelper;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.reactivestreams.*;
 
+import io.reactivex.Flowable;
 import io.reactivex.disposables.*;
 import io.reactivex.exceptions.Exceptions;
 import io.reactivex.functions.Function;
-import io.reactivex.internal.fuseable.SimpleQueue;
+import io.reactivex.internal.functions.ObjectHelper;
+import io.reactivex.internal.fuseable.SimplePlainQueue;
 import io.reactivex.internal.queue.MpscLinkedQueue;
 import io.reactivex.internal.subscribers.QueueDrainSubscriber;
 import io.reactivex.internal.subscriptions.SubscriptionHelper;
@@ -37,7 +38,7 @@ extends AbstractFlowableWithUpstream<T, U> {
     final Publisher<? extends Open> bufferOpen;
     final Function<? super Open, ? extends Publisher<? extends Close>> bufferClose;
 
-    public FlowableBufferBoundary(Publisher<T> source, Publisher<? extends Open> bufferOpen,
+    public FlowableBufferBoundary(Flowable<T> source, Publisher<? extends Open> bufferOpen,
             Function<? super Open, ? extends Publisher<? extends Close>> bufferClose, Callable<U> bufferSupplier) {
         super(source);
         this.bufferOpen = bufferOpen;
@@ -127,7 +128,7 @@ extends AbstractFlowableWithUpstream<T, U> {
                 buffers.clear();
             }
 
-            SimpleQueue<U> q = queue;
+            SimplePlainQueue<U> q = queue;
             for (U u : list) {
                 q.offer(u);
             }

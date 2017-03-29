@@ -87,7 +87,7 @@ public class FutureSubscriberTest {
                 assertEquals("One", ex.getCause().getMessage());
             }
 
-            TestHelper.assertError(errors, 0, TestException.class, "Two");
+            TestHelper.assertUndeliverable(errors, 0, TestException.class, "Two");
         } finally {
             RxJavaPlugins.reset();
         }
@@ -267,5 +267,18 @@ public class FutureSubscriberTest {
         fs.onComplete();
 
         assertEquals(1, fs.get(5, TimeUnit.MILLISECONDS).intValue());
+    }
+
+    @Test
+    public void completeAsync() throws Exception {
+        Schedulers.single().scheduleDirect(new Runnable() {
+            @Override
+            public void run() {
+                fs.onNext(1);
+                fs.onComplete();
+            }
+        }, 500, TimeUnit.MILLISECONDS);
+
+        assertEquals(1, fs.get().intValue());
     }
 }

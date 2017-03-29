@@ -13,18 +13,18 @@
 
 package io.reactivex.internal.operators.flowable;
 
-import io.reactivex.internal.functions.ObjectHelper;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.reactivestreams.*;
 
-import io.reactivex.Scheduler;
+import io.reactivex.*;
 import io.reactivex.Scheduler.Worker;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.exceptions.Exceptions;
-import io.reactivex.internal.disposables.*;
+import io.reactivex.internal.disposables.DisposableHelper;
+import io.reactivex.internal.functions.ObjectHelper;
 import io.reactivex.internal.queue.MpscLinkedQueue;
 import io.reactivex.internal.subscribers.QueueDrainSubscriber;
 import io.reactivex.internal.subscriptions.*;
@@ -41,7 +41,7 @@ public final class FlowableBufferTimed<T, U extends Collection<? super T>> exten
     final int maxSize;
     final boolean restartTimerOnMaxSize;
 
-    public FlowableBufferTimed(Publisher<T> source, long timespan, long timeskip, TimeUnit unit, Scheduler scheduler, Callable<U> bufferSupplier, int maxSize,
+    public FlowableBufferTimed(Flowable<T> source, long timespan, long timeskip, TimeUnit unit, Scheduler scheduler, Callable<U> bufferSupplier, int maxSize,
             boolean restartTimerOnMaxSize) {
         super(source);
         this.timespan = timespan;
@@ -177,9 +177,9 @@ public final class FlowableBufferTimed<T, U extends Collection<? super T>> exten
 
         @Override
         public void cancel() {
-            DisposableHelper.dispose(timer);
-
             s.cancel();
+
+            DisposableHelper.dispose(timer);
         }
 
         @Override
@@ -280,16 +280,7 @@ public final class FlowableBufferTimed<T, U extends Collection<? super T>> exten
 
             w.schedulePeriodically(this, timeskip, timeskip, unit);
 
-            w.schedule(new Runnable() {
-                @Override
-                public void run() {
-                    synchronized (BufferSkipBoundedSubscriber.this) {
-                        buffers.remove(b);
-                    }
-
-                    fastPathOrderedEmitMax(b, false, w);
-                }
-            }, timespan, unit);
+            w.schedule(new RemoveFromBuffer(b), timespan, unit);
         }
 
         @Override
@@ -333,9 +324,9 @@ public final class FlowableBufferTimed<T, U extends Collection<? super T>> exten
 
         @Override
         public void cancel() {
-            w.dispose();
             clear();
             s.cancel();
+            w.dispose();
         }
 
         void clear() {
@@ -367,22 +358,30 @@ public final class FlowableBufferTimed<T, U extends Collection<? super T>> exten
                 buffers.add(b);
             }
 
-            w.schedule(new Runnable() {
-                @Override
-                public void run() {
-                    synchronized (BufferSkipBoundedSubscriber.this) {
-                        buffers.remove(b);
-                    }
-
-                    fastPathOrderedEmitMax(b, false, w);
-                }
-            }, timespan, unit);
+            w.schedule(new RemoveFromBuffer(b), timespan, unit);
         }
 
         @Override
         public boolean accept(Subscriber<? super U> a, U v) {
             a.onNext(v);
             return true;
+        }
+
+        final class RemoveFromBuffer implements Runnable {
+            private final U buffer;
+
+            RemoveFromBuffer(U buffer) {
+                this.buffer = buffer;
+            }
+
+            @Override
+            public void run() {
+                synchronized (BufferSkipBoundedSubscriber.this) {
+                    buffers.remove(buffer);
+                }
+
+                fastPathOrderedEmitMax(buffer, false, w);
+            }
         }
     }
 
@@ -497,17 +496,15 @@ public final class FlowableBufferTimed<T, U extends Collection<? super T>> exten
 
         @Override
         public void onError(Throwable t) {
-            w.dispose();
             synchronized (this) {
                 buffer = null;
             }
             actual.onError(t);
+            w.dispose();
         }
 
         @Override
         public void onComplete() {
-            w.dispose();
-
             U b;
             synchronized (this) {
                 b = buffer;
@@ -519,6 +516,8 @@ public final class FlowableBufferTimed<T, U extends Collection<? super T>> exten
             if (enter()) {
                 QueueDrainHelper.drainMaxLoop(queue, actual, false, this, this);
             }
+
+            w.dispose();
         }
 
         @Override
@@ -543,11 +542,11 @@ public final class FlowableBufferTimed<T, U extends Collection<? super T>> exten
 
         @Override
         public void dispose() {
-            w.dispose();
             synchronized (this) {
                 buffer = null;
             }
             s.cancel();
+            w.dispose();
         }
 
         @Override

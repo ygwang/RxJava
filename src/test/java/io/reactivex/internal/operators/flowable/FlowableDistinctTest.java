@@ -173,7 +173,7 @@ public class FlowableDistinctTest {
     public void fusedClear() {
         Flowable.just(1, 1, 2, 1, 3, 2, 4, 5, 4)
         .distinct()
-        .subscribe(new Subscriber<Integer>() {
+        .subscribe(new FlowableSubscriber<Integer>() {
             @Override
             public void onSubscribe(Subscription d) {
                 QueueSubscription<?> qd = (QueueSubscription<?>)d;
@@ -246,7 +246,7 @@ public class FlowableDistinctTest {
             .test()
             .assertResult(1);
 
-            TestHelper.assertError(errors, 0, TestException.class);
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }

@@ -40,6 +40,10 @@ public final class MaybeZipIterable<T, R> extends Maybe<R> {
 
         try {
             for (MaybeSource<? extends T> source : sources) {
+                if (source == null) {
+                    EmptyDisposable.error(new NullPointerException("One of the sources is null"), observer);
+                    return;
+                }
                 if (n == a.length) {
                     a = Arrays.copyOf(a, n + (n >> 2));
                 }
@@ -57,12 +61,7 @@ public final class MaybeZipIterable<T, R> extends Maybe<R> {
         }
 
         if (n == 1) {
-            a[0].subscribe(new MaybeMap.MapMaybeObserver<T, R>(observer, new Function<T, R>() {
-                @Override
-                public R apply(T t) throws Exception {
-                    return zipper.apply(new Object[] { t });
-                }
-            }));
+            a[0].subscribe(new MaybeMap.MapMaybeObserver<T, R>(observer, new SingletonArrayFunc()));
             return;
         }
 
@@ -79,4 +78,10 @@ public final class MaybeZipIterable<T, R> extends Maybe<R> {
         }
     }
 
+    final class SingletonArrayFunc implements Function<T, R> {
+        @Override
+        public R apply(T t) throws Exception {
+            return zipper.apply(new Object[] { t });
+        }
+    }
 }

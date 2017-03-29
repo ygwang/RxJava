@@ -32,7 +32,7 @@ import io.reactivex.plugins.RxJavaPlugins;
  * Abstract base class for Parallel publishers that take an array of Subscribers.
  * <p>
  * Use {@code from()} to start processing a regular Publisher in 'rails'.
- * Use {@code runOn()} to introduce where each 'rail' shoud run on thread-vise.
+ * Use {@code runOn()} to introduce where each 'rail' should run on thread-vise.
  * Use {@code sequential()} to merge the sources back into a single Flowable.
  *
  * @param <T> the value type
@@ -49,7 +49,7 @@ public abstract class ParallelFlowable<T> {
      * of items must be equal to the parallelism level of this ParallelFlowable
      * @see #parallelism()
      */
-    public abstract void subscribe(Subscriber<? super T>[] subscribers);
+    public abstract void subscribe(@NonNull Subscriber<? super T>[] subscribers);
 
     /**
      * Returns the number of expected parallel Subscribers.
@@ -64,7 +64,7 @@ public abstract class ParallelFlowable<T> {
      * @param subscribers the array of Subscribers
      * @return true if the number of subscribers equals to the parallelism level
      */
-    protected final boolean validate(Subscriber<?>[] subscribers) {
+    protected final boolean validate(@NonNull Subscriber<?>[] subscribers) {
         int p = parallelism();
         if (subscribers.length != p) {
             Throwable iae = new IllegalArgumentException("parallelism = " + p + ", subscribers = " + subscribers.length);
@@ -84,24 +84,24 @@ public abstract class ParallelFlowable<T> {
      * @return the ParallelFlowable instance
      */
     @CheckReturnValue
-    public static <T> ParallelFlowable<T> from(Publisher<? extends T> source) {
+    public static <T> ParallelFlowable<T> from(@NonNull Publisher<? extends T> source) {
         return from(source, Runtime.getRuntime().availableProcessors(), Flowable.bufferSize());
     }
 
     /**
-     * Take a Publisher and prepare to consume it on parallallism number of 'rails' in a round-robin fashion.
+     * Take a Publisher and prepare to consume it on parallelism number of 'rails' in a round-robin fashion.
      * @param <T> the value type
      * @param source the source Publisher
      * @param parallelism the number of parallel rails
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public static <T> ParallelFlowable<T> from(Publisher<? extends T> source, int parallelism) {
+    public static <T> ParallelFlowable<T> from(@NonNull Publisher<? extends T> source, int parallelism) {
         return from(source, parallelism, Flowable.bufferSize());
     }
 
     /**
-     * Take a Publisher and prepare to consume it on parallallism number of 'rails' ,
+     * Take a Publisher and prepare to consume it on parallelism number of 'rails' ,
      * possibly ordered and round-robin fashion and use custom prefetch amount and queue
      * for dealing with the source Publisher's values.
      * @param <T> the value type
@@ -112,13 +112,13 @@ public abstract class ParallelFlowable<T> {
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public static <T> ParallelFlowable<T> from(Publisher<? extends T> source,
+    public static <T> ParallelFlowable<T> from(@NonNull Publisher<? extends T> source,
             int parallelism, int prefetch) {
         ObjectHelper.requireNonNull(source, "source");
         ObjectHelper.verifyPositive(parallelism, "parallelism");
         ObjectHelper.verifyPositive(prefetch, "prefetch");
 
-        return new ParallelFromPublisher<T>(source, parallelism, prefetch);
+        return RxJavaPlugins.onAssembly(new ParallelFromPublisher<T>(source, parallelism, prefetch));
     }
 
     /**
@@ -130,9 +130,50 @@ public abstract class ParallelFlowable<T> {
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public final <R> ParallelFlowable<R> map(Function<? super T, ? extends R> mapper) {
+    public final <R> ParallelFlowable<R> map(@NonNull Function<? super T, ? extends R> mapper) {
         ObjectHelper.requireNonNull(mapper, "mapper");
-        return new ParallelMap<T, R>(this, mapper);
+        return RxJavaPlugins.onAssembly(new ParallelMap<T, R>(this, mapper));
+    }
+
+    /**
+     * Maps the source values on each 'rail' to another value and
+     * handles errors based on the given {@link ParallelFailureHandling} enumeration value.
+     * <p>
+     * Note that the same mapper function may be called from multiple threads concurrently.
+     * @param <R> the output value type
+     * @param mapper the mapper function turning Ts into Us.
+     * @param errorHandler the enumeration that defines how to handle errors thrown
+     *                     from the mapper function
+     * @return the new ParallelFlowable instance
+     * @since 2.0.8 - experimental
+     */
+    @CheckReturnValue
+    @Experimental
+    public final <R> ParallelFlowable<R> map(@NonNull Function<? super T, ? extends R> mapper, @NonNull ParallelFailureHandling errorHandler) {
+        ObjectHelper.requireNonNull(mapper, "mapper");
+        ObjectHelper.requireNonNull(errorHandler, "errorHandler is null");
+        return RxJavaPlugins.onAssembly(new ParallelMapTry<T, R>(this, mapper, errorHandler));
+    }
+
+    /**
+     * Maps the source values on each 'rail' to another value and
+     * handles errors based on the returned value by the handler function.
+     * <p>
+     * Note that the same mapper function may be called from multiple threads concurrently.
+     * @param <R> the output value type
+     * @param mapper the mapper function turning Ts into Us.
+     * @param errorHandler the function called with the current repeat count and
+     *                     failure Throwable and should return one of the {@link ParallelFailureHandling}
+     *                     enumeration values to indicate how to proceed.
+     * @return the new ParallelFlowable instance
+     * @since 2.0.8 - experimental
+     */
+    @CheckReturnValue
+    @Experimental
+    public final <R> ParallelFlowable<R> map(@NonNull Function<? super T, ? extends R> mapper, @NonNull BiFunction<? super Long, ? super Throwable, ParallelFailureHandling> errorHandler) {
+        ObjectHelper.requireNonNull(mapper, "mapper");
+        ObjectHelper.requireNonNull(errorHandler, "errorHandler is null");
+        return RxJavaPlugins.onAssembly(new ParallelMapTry<T, R>(this, mapper, errorHandler));
     }
 
     /**
@@ -143,9 +184,49 @@ public abstract class ParallelFlowable<T> {
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public final ParallelFlowable<T> filter(Predicate<? super T> predicate) {
+    public final ParallelFlowable<T> filter(@NonNull Predicate<? super T> predicate) {
         ObjectHelper.requireNonNull(predicate, "predicate");
-        return new ParallelFilter<T>(this, predicate);
+        return RxJavaPlugins.onAssembly(new ParallelFilter<T>(this, predicate));
+    }
+
+    /**
+     * Filters the source values on each 'rail' and
+     * handles errors based on the given {@link ParallelFailureHandling} enumeration value.
+     * <p>
+     * Note that the same predicate may be called from multiple threads concurrently.
+     * @param predicate the function returning true to keep a value or false to drop a value
+     * @param errorHandler the enumeration that defines how to handle errors thrown
+     *                     from the predicate
+     * @return the new ParallelFlowable instance
+     * @since 2.0.8 - experimental
+     */
+    @CheckReturnValue
+    @Experimental
+    public final ParallelFlowable<T> filter(@NonNull Predicate<? super T> predicate, @NonNull ParallelFailureHandling errorHandler) {
+        ObjectHelper.requireNonNull(predicate, "predicate");
+        ObjectHelper.requireNonNull(errorHandler, "errorHandler is null");
+        return RxJavaPlugins.onAssembly(new ParallelFilterTry<T>(this, predicate, errorHandler));
+    }
+
+
+    /**
+     * Filters the source values on each 'rail' and
+     * handles errors based on the returned value by the handler function.
+     * <p>
+     * Note that the same predicate may be called from multiple threads concurrently.
+     * @param predicate the function returning true to keep a value or false to drop a value
+     * @param errorHandler the function called with the current repeat count and
+     *                     failure Throwable and should return one of the {@link ParallelFailureHandling}
+     *                     enumeration values to indicate how to proceed.
+     * @return the new ParallelFlowable instance
+     * @since 2.0.8 - experimental
+     */
+    @CheckReturnValue
+    @Experimental
+    public final ParallelFlowable<T> filter(@NonNull Predicate<? super T> predicate, @NonNull BiFunction<? super Long, ? super Throwable, ParallelFailureHandling> errorHandler) {
+        ObjectHelper.requireNonNull(predicate, "predicate");
+        ObjectHelper.requireNonNull(errorHandler, "errorHandler is null");
+        return RxJavaPlugins.onAssembly(new ParallelFilterTry<T>(this, predicate, errorHandler));
     }
 
     /**
@@ -168,7 +249,7 @@ public abstract class ParallelFlowable<T> {
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public final ParallelFlowable<T> runOn(Scheduler scheduler) {
+    public final ParallelFlowable<T> runOn(@NonNull Scheduler scheduler) {
         return runOn(scheduler, Flowable.bufferSize());
     }
 
@@ -194,10 +275,10 @@ public abstract class ParallelFlowable<T> {
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public final ParallelFlowable<T> runOn(Scheduler scheduler, int prefetch) {
+    public final ParallelFlowable<T> runOn(@NonNull Scheduler scheduler, int prefetch) {
         ObjectHelper.requireNonNull(scheduler, "scheduler");
         ObjectHelper.verifyPositive(prefetch, "prefetch");
-        return new ParallelRunOn<T>(this, scheduler, prefetch);
+        return RxJavaPlugins.onAssembly(new ParallelRunOn<T>(this, scheduler, prefetch));
     }
 
     /**
@@ -209,7 +290,7 @@ public abstract class ParallelFlowable<T> {
      * @return the new Flowable instance emitting the reduced value or empty if the ParallelFlowable was empty
      */
     @CheckReturnValue
-    public final Flowable<T> reduce(BiFunction<T, T, T> reducer) {
+    public final Flowable<T> reduce(@NonNull BiFunction<T, T, T> reducer) {
         ObjectHelper.requireNonNull(reducer, "reducer");
         return RxJavaPlugins.onAssembly(new ParallelReduceFull<T>(this, reducer));
     }
@@ -226,10 +307,10 @@ public abstract class ParallelFlowable<T> {
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public final <R> ParallelFlowable<R> reduce(Callable<R> initialSupplier, BiFunction<R, ? super T, R> reducer) {
+    public final <R> ParallelFlowable<R> reduce(@NonNull Callable<R> initialSupplier, @NonNull BiFunction<R, ? super T, R> reducer) {
         ObjectHelper.requireNonNull(initialSupplier, "initialSupplier");
         ObjectHelper.requireNonNull(reducer, "reducer");
-        return new ParallelReduce<T, R>(this, initialSupplier, reducer);
+        return RxJavaPlugins.onAssembly(new ParallelReduce<T, R>(this, initialSupplier, reducer));
     }
 
     /**
@@ -238,7 +319,7 @@ public abstract class ParallelFlowable<T> {
      * for the rails.
      * <p>
      * This operator uses the default prefetch size returned by {@code Flowable.bufferSize()}.
-     * <img width="640" height="310" src="https://raw.github.com/wiki/ReactiveX/RxJava/images/rx-operators/parallelflowable.sequential.png" alt="">
+     * <img width="640" height="602" src="https://raw.github.com/wiki/ReactiveX/RxJava/images/rx-operators/parallelflowable.sequential.png" alt="">
      * <dl>
      *  <dt><b>Backpressure:</b></dt>
      *  <dd>The operator honors backpressure.</dd>
@@ -247,6 +328,7 @@ public abstract class ParallelFlowable<T> {
      * </dl>
      * @return the new Flowable instance
      * @see ParallelFlowable#sequential(int)
+     * @see ParallelFlowable#sequentialDelayError()
      */
     @BackpressureSupport(BackpressureKind.FULL)
     @SchedulerSupport(SchedulerSupport.NONE)
@@ -259,7 +341,7 @@ public abstract class ParallelFlowable<T> {
      * Merges the values from each 'rail' in a round-robin or same-order fashion and
      * exposes it as a regular Publisher sequence, running with a give prefetch value
      * for the rails.
-     * <img width="640" height="310" src="https://raw.github.com/wiki/ReactiveX/RxJava/images/rx-operators/parallelflowable.sequential.png" alt="">
+     * <img width="640" height="602" src="https://raw.github.com/wiki/ReactiveX/RxJava/images/rx-operators/parallelflowable.sequential.png" alt="">
      * <dl>
      *  <dt><b>Backpressure:</b></dt>
      *  <dd>The operator honors backpressure.</dd>
@@ -269,13 +351,65 @@ public abstract class ParallelFlowable<T> {
      * @param prefetch the prefetch amount to use for each rail
      * @return the new Flowable instance
      * @see ParallelFlowable#sequential()
+     * @see ParallelFlowable#sequentialDelayError(int)
      */
     @BackpressureSupport(BackpressureKind.FULL)
     @SchedulerSupport(SchedulerSupport.NONE)
     @CheckReturnValue
     public final Flowable<T> sequential(int prefetch) {
         ObjectHelper.verifyPositive(prefetch, "prefetch");
-        return RxJavaPlugins.onAssembly(new ParallelJoin<T>(this, prefetch));
+        return RxJavaPlugins.onAssembly(new ParallelJoin<T>(this, prefetch, false));
+    }
+
+    /**
+     * Merges the values from each 'rail' in a round-robin or same-order fashion and
+     * exposes it as a regular Flowable sequence, running with a default prefetch value
+     * for the rails and delaying errors from all rails till all terminate.
+     * <p>
+     * This operator uses the default prefetch size returned by {@code Flowable.bufferSize()}.
+     * <img width="640" height="602" src="https://raw.github.com/wiki/ReactiveX/RxJava/images/rx-operators/parallelflowable.sequential.png" alt="">
+     * <dl>
+     *  <dt><b>Backpressure:</b></dt>
+     *  <dd>The operator honors backpressure.</dd>
+     *  <dt><b>Scheduler:</b></dt>
+     *  <dd>{@code sequentialDelayError} does not operate by default on a particular {@link Scheduler}.</dd>
+     * </dl>
+     * @return the new Flowable instance
+     * @see ParallelFlowable#sequentialDelayError(int)
+     * @see ParallelFlowable#sequential()
+     * @since 2.0.7 - experimental
+     */
+    @BackpressureSupport(BackpressureKind.FULL)
+    @SchedulerSupport(SchedulerSupport.NONE)
+    @CheckReturnValue
+    @Experimental
+    public final Flowable<T> sequentialDelayError() {
+        return sequentialDelayError(Flowable.bufferSize());
+    }
+
+    /**
+     * Merges the values from each 'rail' in a round-robin or same-order fashion and
+     * exposes it as a regular Publisher sequence, running with a give prefetch value
+     * for the rails and delaying errors from all rails till all terminate.
+     * <img width="640" height="602" src="https://raw.github.com/wiki/ReactiveX/RxJava/images/rx-operators/parallelflowable.sequential.png" alt="">
+     * <dl>
+     *  <dt><b>Backpressure:</b></dt>
+     *  <dd>The operator honors backpressure.</dd>
+     *  <dt><b>Scheduler:</b></dt>
+     *  <dd>{@code sequentialDelayError} does not operate by default on a particular {@link Scheduler}.</dd>
+     * </dl>
+     * @param prefetch the prefetch amount to use for each rail
+     * @return the new Flowable instance
+     * @see ParallelFlowable#sequential()
+     * @see ParallelFlowable#sequentialDelayError()
+     * @since 2.0.7 - experimental
+     */
+    @BackpressureSupport(BackpressureKind.FULL)
+    @SchedulerSupport(SchedulerSupport.NONE)
+    @CheckReturnValue
+    public final Flowable<T> sequentialDelayError(int prefetch) {
+        ObjectHelper.verifyPositive(prefetch, "prefetch");
+        return RxJavaPlugins.onAssembly(new ParallelJoin<T>(this, prefetch, true));
     }
 
     /**
@@ -288,7 +422,7 @@ public abstract class ParallelFlowable<T> {
      * @return the new Flowable instance
      */
     @CheckReturnValue
-    public final Flowable<T> sorted(Comparator<? super T> comparator) {
+    public final Flowable<T> sorted(@NonNull Comparator<? super T> comparator) {
         return sorted(comparator, 16);
     }
 
@@ -303,7 +437,9 @@ public abstract class ParallelFlowable<T> {
      * @return the new Flowable instance
      */
     @CheckReturnValue
-    public final Flowable<T> sorted(Comparator<? super T> comparator, int capacityHint) {
+    public final Flowable<T> sorted(@NonNull Comparator<? super T> comparator, int capacityHint) {
+        ObjectHelper.requireNonNull(comparator, "comparator is null");
+        ObjectHelper.verifyPositive(capacityHint, "capacityHint");
         int ch = capacityHint / parallelism() + 1;
         ParallelFlowable<List<T>> railReduced = reduce(Functions.<T>createArrayList(ch), ListAddBiConsumer.<T>instance());
         ParallelFlowable<List<T>> railSorted = railReduced.map(new SorterFunction<T>(comparator));
@@ -317,10 +453,10 @@ public abstract class ParallelFlowable<T> {
      * This operator requires a finite source ParallelFlowable.
      *
      * @param comparator the comparator to compare elements
-     * @return the new Px instannce
+     * @return the new Flowable instance
      */
     @CheckReturnValue
-    public final Flowable<List<T>> toSortedList(Comparator<? super T> comparator) {
+    public final Flowable<List<T>> toSortedList(@NonNull Comparator<? super T> comparator) {
         return toSortedList(comparator, 16);
     }
     /**
@@ -330,10 +466,13 @@ public abstract class ParallelFlowable<T> {
      *
      * @param comparator the comparator to compare elements
      * @param capacityHint the expected number of total elements
-     * @return the new Px instannce
+     * @return the new Flowable instance
      */
     @CheckReturnValue
-    public final Flowable<List<T>> toSortedList(Comparator<? super T> comparator, int capacityHint) {
+    public final Flowable<List<T>> toSortedList(@NonNull Comparator<? super T> comparator, int capacityHint) {
+        ObjectHelper.requireNonNull(comparator, "comparator is null");
+        ObjectHelper.verifyPositive(capacityHint, "capacityHint");
+
         int ch = capacityHint / parallelism() + 1;
         ParallelFlowable<List<T>> railReduced = reduce(Functions.<T>createArrayList(ch), ListAddBiConsumer.<T>instance());
         ParallelFlowable<List<T>> railSorted = railReduced.map(new SorterFunction<T>(comparator));
@@ -350,8 +489,9 @@ public abstract class ParallelFlowable<T> {
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public final ParallelFlowable<T> doOnNext(Consumer<? super T> onNext) {
-        return new ParallelPeek<T>(this,
+    public final ParallelFlowable<T> doOnNext(@NonNull Consumer<? super T> onNext) {
+        ObjectHelper.requireNonNull(onNext, "onNext is null");
+        return RxJavaPlugins.onAssembly(new ParallelPeek<T>(this,
                 onNext,
                 Functions.emptyConsumer(),
                 Functions.emptyConsumer(),
@@ -360,7 +500,45 @@ public abstract class ParallelFlowable<T> {
                 Functions.emptyConsumer(),
                 Functions.EMPTY_LONG_CONSUMER,
                 Functions.EMPTY_ACTION
-                );
+                ));
+    }
+
+
+    /**
+     * Call the specified consumer with the current element passing through any 'rail' and
+     * handles errors based on the given {@link ParallelFailureHandling} enumeration value.
+     *
+     * @param onNext the callback
+     * @param errorHandler the enumeration that defines how to handle errors thrown
+     *                     from the onNext consumer
+     * @return the new ParallelFlowable instance
+     * @since 2.0.8 - experimental
+     */
+    @CheckReturnValue
+    @Experimental
+    public final ParallelFlowable<T> doOnNext(@NonNull Consumer<? super T> onNext, @NonNull ParallelFailureHandling errorHandler) {
+        ObjectHelper.requireNonNull(onNext, "onNext is null");
+        ObjectHelper.requireNonNull(errorHandler, "errorHandler is null");
+        return RxJavaPlugins.onAssembly(new ParallelDoOnNextTry<T>(this, onNext, errorHandler));
+    }
+
+    /**
+     * Call the specified consumer with the current element passing through any 'rail' and
+     * handles errors based on the returned value by the handler function.
+     *
+     * @param onNext the callback
+     * @param errorHandler the function called with the current repeat count and
+     *                     failure Throwable and should return one of the {@link ParallelFailureHandling}
+     *                     enumeration values to indicate how to proceed.
+     * @return the new ParallelFlowable instance
+     * @since 2.0.8 - experimental
+     */
+    @CheckReturnValue
+    @Experimental
+    public final ParallelFlowable<T> doOnNext(@NonNull Consumer<? super T> onNext, @NonNull BiFunction<? super Long, ? super Throwable, ParallelFailureHandling> errorHandler) {
+        ObjectHelper.requireNonNull(onNext, "onNext is null");
+        ObjectHelper.requireNonNull(errorHandler, "errorHandler is null");
+        return RxJavaPlugins.onAssembly(new ParallelDoOnNextTry<T>(this, onNext, errorHandler));
     }
 
     /**
@@ -371,8 +549,9 @@ public abstract class ParallelFlowable<T> {
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public final ParallelFlowable<T> doAfterNext(Consumer<? super T> onAfterNext) {
-        return new ParallelPeek<T>(this,
+    public final ParallelFlowable<T> doAfterNext(@NonNull Consumer<? super T> onAfterNext) {
+        ObjectHelper.requireNonNull(onAfterNext, "onAfterNext is null");
+        return RxJavaPlugins.onAssembly(new ParallelPeek<T>(this,
                 Functions.emptyConsumer(),
                 onAfterNext,
                 Functions.emptyConsumer(),
@@ -381,7 +560,7 @@ public abstract class ParallelFlowable<T> {
                 Functions.emptyConsumer(),
                 Functions.EMPTY_LONG_CONSUMER,
                 Functions.EMPTY_ACTION
-                );
+                ));
     }
 
     /**
@@ -391,8 +570,9 @@ public abstract class ParallelFlowable<T> {
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public final ParallelFlowable<T> doOnError(Consumer<Throwable> onError) {
-        return new ParallelPeek<T>(this,
+    public final ParallelFlowable<T> doOnError(@NonNull Consumer<Throwable> onError) {
+        ObjectHelper.requireNonNull(onError, "onError is null");
+        return RxJavaPlugins.onAssembly(new ParallelPeek<T>(this,
                 Functions.emptyConsumer(),
                 Functions.emptyConsumer(),
                 onError,
@@ -401,7 +581,7 @@ public abstract class ParallelFlowable<T> {
                 Functions.emptyConsumer(),
                 Functions.EMPTY_LONG_CONSUMER,
                 Functions.EMPTY_ACTION
-                );
+                ));
     }
 
     /**
@@ -411,8 +591,9 @@ public abstract class ParallelFlowable<T> {
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public final ParallelFlowable<T> doOnComplete(Action onComplete) {
-        return new ParallelPeek<T>(this,
+    public final ParallelFlowable<T> doOnComplete(@NonNull Action onComplete) {
+        ObjectHelper.requireNonNull(onComplete, "onComplete is null");
+        return RxJavaPlugins.onAssembly(new ParallelPeek<T>(this,
                 Functions.emptyConsumer(),
                 Functions.emptyConsumer(),
                 Functions.emptyConsumer(),
@@ -421,7 +602,7 @@ public abstract class ParallelFlowable<T> {
                 Functions.emptyConsumer(),
                 Functions.EMPTY_LONG_CONSUMER,
                 Functions.EMPTY_ACTION
-                );
+                ));
     }
 
     /**
@@ -431,8 +612,9 @@ public abstract class ParallelFlowable<T> {
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public final ParallelFlowable<T> doAfterTerminated(Action onAfterTerminate) {
-        return new ParallelPeek<T>(this,
+    public final ParallelFlowable<T> doAfterTerminated(@NonNull Action onAfterTerminate) {
+        ObjectHelper.requireNonNull(onAfterTerminate, "onAfterTerminate is null");
+        return RxJavaPlugins.onAssembly(new ParallelPeek<T>(this,
                 Functions.emptyConsumer(),
                 Functions.emptyConsumer(),
                 Functions.emptyConsumer(),
@@ -441,7 +623,7 @@ public abstract class ParallelFlowable<T> {
                 Functions.emptyConsumer(),
                 Functions.EMPTY_LONG_CONSUMER,
                 Functions.EMPTY_ACTION
-                );
+                ));
     }
 
     /**
@@ -451,8 +633,9 @@ public abstract class ParallelFlowable<T> {
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public final ParallelFlowable<T> doOnSubscribe(Consumer<? super Subscription> onSubscribe) {
-        return new ParallelPeek<T>(this,
+    public final ParallelFlowable<T> doOnSubscribe(@NonNull Consumer<? super Subscription> onSubscribe) {
+        ObjectHelper.requireNonNull(onSubscribe, "onSubscribe is null");
+        return RxJavaPlugins.onAssembly(new ParallelPeek<T>(this,
                 Functions.emptyConsumer(),
                 Functions.emptyConsumer(),
                 Functions.emptyConsumer(),
@@ -461,7 +644,7 @@ public abstract class ParallelFlowable<T> {
                 onSubscribe,
                 Functions.EMPTY_LONG_CONSUMER,
                 Functions.EMPTY_ACTION
-                );
+                ));
     }
 
     /**
@@ -471,8 +654,9 @@ public abstract class ParallelFlowable<T> {
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public final ParallelFlowable<T> doOnRequest(LongConsumer onRequest) {
-        return new ParallelPeek<T>(this,
+    public final ParallelFlowable<T> doOnRequest(@NonNull LongConsumer onRequest) {
+        ObjectHelper.requireNonNull(onRequest, "onRequest is null");
+        return RxJavaPlugins.onAssembly(new ParallelPeek<T>(this,
                 Functions.emptyConsumer(),
                 Functions.emptyConsumer(),
                 Functions.emptyConsumer(),
@@ -481,7 +665,7 @@ public abstract class ParallelFlowable<T> {
                 Functions.emptyConsumer(),
                 onRequest,
                 Functions.EMPTY_ACTION
-                );
+                ));
     }
 
     /**
@@ -491,8 +675,9 @@ public abstract class ParallelFlowable<T> {
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public final ParallelFlowable<T> doOnCancel(Action onCancel) {
-        return new ParallelPeek<T>(this,
+    public final ParallelFlowable<T> doOnCancel(@NonNull Action onCancel) {
+        ObjectHelper.requireNonNull(onCancel, "onCancel is null");
+        return RxJavaPlugins.onAssembly(new ParallelPeek<T>(this,
                 Functions.emptyConsumer(),
                 Functions.emptyConsumer(),
                 Functions.emptyConsumer(),
@@ -501,7 +686,7 @@ public abstract class ParallelFlowable<T> {
                 Functions.emptyConsumer(),
                 Functions.EMPTY_LONG_CONSUMER,
                 onCancel
-                );
+                ));
     }
 
     /**
@@ -510,12 +695,14 @@ public abstract class ParallelFlowable<T> {
      *
      * @param <C> the collection type
      * @param collectionSupplier the supplier of the collection in each rail
-     * @param collector the collector, taking the per-rali collection and the current item
+     * @param collector the collector, taking the per-rail collection and the current item
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public final <C> ParallelFlowable<C> collect(Callable<? extends C> collectionSupplier, BiConsumer<? super C, ? super T> collector) {
-        return new ParallelCollect<T, C>(this, collectionSupplier, collector);
+    public final <C> ParallelFlowable<C> collect(@NonNull Callable<? extends C> collectionSupplier, @NonNull BiConsumer<? super C, ? super T> collector) {
+        ObjectHelper.requireNonNull(collectionSupplier, "collectionSupplier is null");
+        ObjectHelper.requireNonNull(collector, "collector is null");
+        return RxJavaPlugins.onAssembly(new ParallelCollect<T, C>(this, collectionSupplier, collector));
     }
 
     /**
@@ -527,11 +714,11 @@ public abstract class ParallelFlowable<T> {
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public static <T> ParallelFlowable<T> fromArray(Publisher<T>... publishers) {
+    public static <T> ParallelFlowable<T> fromArray(@NonNull Publisher<T>... publishers) {
         if (publishers.length == 0) {
             throw new IllegalArgumentException("Zero publishers not supported");
         }
-        return new ParallelFromArray<T>(publishers);
+        return RxJavaPlugins.onAssembly(new ParallelFromArray<T>(publishers));
     }
 
     /**
@@ -543,9 +730,9 @@ public abstract class ParallelFlowable<T> {
      * @return the value returned by the converter function
      */
     @CheckReturnValue
-    public final <U> U to(Function<? super ParallelFlowable<T>, U> converter) {
+    public final <U> U to(@NonNull Function<? super ParallelFlowable<T>, U> converter) {
         try {
-            return converter.apply(this);
+            return ObjectHelper.requireNonNull(converter, "converter is null").apply(this);
         } catch (Throwable ex) {
             Exceptions.throwIfFatal(ex);
             throw ExceptionHelper.wrapOrThrow(ex);
@@ -561,8 +748,8 @@ public abstract class ParallelFlowable<T> {
      * @return the ParallelFlowable returned by the function
      */
     @CheckReturnValue
-    public final <U> ParallelFlowable<U> compose(Function<? super ParallelFlowable<T>, ParallelFlowable<U>> composer) {
-        return to(composer);
+    public final <U> ParallelFlowable<U> compose(@NonNull ParallelTransformer<T, U> composer) {
+        return RxJavaPlugins.onAssembly(ObjectHelper.requireNonNull(composer, "composer is null").apply(this));
     }
 
     /**
@@ -575,7 +762,7 @@ public abstract class ParallelFlowable<T> {
      * @return the new ParallelFlowable instance
      */
     @CheckReturnValue
-    public final <R> ParallelFlowable<R> flatMap(Function<? super T, ? extends Publisher<? extends R>> mapper) {
+    public final <R> ParallelFlowable<R> flatMap(@NonNull Function<? super T, ? extends Publisher<? extends R>> mapper) {
         return flatMap(mapper, false, Integer.MAX_VALUE, Flowable.bufferSize());
     }
 
@@ -591,7 +778,7 @@ public abstract class ParallelFlowable<T> {
      */
     @CheckReturnValue
     public final <R> ParallelFlowable<R> flatMap(
-            Function<? super T, ? extends Publisher<? extends R>> mapper, boolean delayError) {
+            @NonNull Function<? super T, ? extends Publisher<? extends R>> mapper, boolean delayError) {
         return flatMap(mapper, delayError, Integer.MAX_VALUE, Flowable.bufferSize());
     }
 
@@ -609,7 +796,7 @@ public abstract class ParallelFlowable<T> {
      */
     @CheckReturnValue
     public final <R> ParallelFlowable<R> flatMap(
-            Function<? super T, ? extends Publisher<? extends R>> mapper, boolean delayError, int maxConcurrency) {
+            @NonNull Function<? super T, ? extends Publisher<? extends R>> mapper, boolean delayError, int maxConcurrency) {
         return flatMap(mapper, delayError, maxConcurrency, Flowable.bufferSize());
     }
 
@@ -627,9 +814,12 @@ public abstract class ParallelFlowable<T> {
      */
     @CheckReturnValue
     public final <R> ParallelFlowable<R> flatMap(
-            Function<? super T, ? extends Publisher<? extends R>> mapper,
+            @NonNull Function<? super T, ? extends Publisher<? extends R>> mapper,
             boolean delayError, int maxConcurrency, int prefetch) {
-        return new ParallelFlatMap<T, R>(this, mapper, delayError, maxConcurrency, prefetch);
+        ObjectHelper.requireNonNull(mapper, "mapper is null");
+        ObjectHelper.verifyPositive(maxConcurrency, "maxConcurrency");
+        ObjectHelper.verifyPositive(prefetch, "prefetch");
+        return RxJavaPlugins.onAssembly(new ParallelFlatMap<T, R>(this, mapper, delayError, maxConcurrency, prefetch));
     }
 
     /**
@@ -643,7 +833,7 @@ public abstract class ParallelFlowable<T> {
      */
     @CheckReturnValue
     public final <R> ParallelFlowable<R> concatMap(
-            Function<? super T, ? extends Publisher<? extends R>> mapper) {
+            @NonNull Function<? super T, ? extends Publisher<? extends R>> mapper) {
         return concatMap(mapper, 2);
     }
 
@@ -659,9 +849,11 @@ public abstract class ParallelFlowable<T> {
      */
     @CheckReturnValue
     public final <R> ParallelFlowable<R> concatMap(
-            Function<? super T, ? extends Publisher<? extends R>> mapper,
+            @NonNull Function<? super T, ? extends Publisher<? extends R>> mapper,
                     int prefetch) {
-        return new ParallelConcatMap<T, R>(this, mapper, prefetch, ErrorMode.IMMEDIATE);
+        ObjectHelper.requireNonNull(mapper, "mapper is null");
+        ObjectHelper.verifyPositive(prefetch, "prefetch");
+        return RxJavaPlugins.onAssembly(new ParallelConcatMap<T, R>(this, mapper, prefetch, ErrorMode.IMMEDIATE));
     }
 
     /**
@@ -677,7 +869,7 @@ public abstract class ParallelFlowable<T> {
      */
     @CheckReturnValue
     public final <R> ParallelFlowable<R> concatMapDelayError(
-            Function<? super T, ? extends Publisher<? extends R>> mapper,
+            @NonNull Function<? super T, ? extends Publisher<? extends R>> mapper,
                     boolean tillTheEnd) {
         return concatMapDelayError(mapper, 2, tillTheEnd);
     }
@@ -695,8 +887,11 @@ public abstract class ParallelFlowable<T> {
      */
     @CheckReturnValue
     public final <R> ParallelFlowable<R> concatMapDelayError(
-            Function<? super T, ? extends Publisher<? extends R>> mapper,
+            @NonNull Function<? super T, ? extends Publisher<? extends R>> mapper,
                     int prefetch, boolean tillTheEnd) {
-        return new ParallelConcatMap<T, R>(this, mapper, prefetch, tillTheEnd ? ErrorMode.END : ErrorMode.BOUNDARY);
+        ObjectHelper.requireNonNull(mapper, "mapper is null");
+        ObjectHelper.verifyPositive(prefetch, "prefetch");
+        return RxJavaPlugins.onAssembly(new ParallelConcatMap<T, R>(
+                this, mapper, prefetch, tillTheEnd ? ErrorMode.END : ErrorMode.BOUNDARY));
     }
 }

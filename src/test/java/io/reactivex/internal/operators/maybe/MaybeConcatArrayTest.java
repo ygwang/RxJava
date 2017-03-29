@@ -16,6 +16,7 @@ package io.reactivex.internal.operators.maybe;
 import java.io.IOException;
 import java.util.List;
 
+import static org.junit.Assert.*;
 import org.junit.Test;
 
 import io.reactivex.*;
@@ -151,9 +152,49 @@ public class MaybeConcatArrayTest {
             o[0].onError(new TestException());
 
 
-            TestHelper.assertError(errors, 0, TestException.class);
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void noSubsequentSubscription() {
+        final int[] calls = { 0 };
+
+        Maybe<Integer> source = Maybe.create(new MaybeOnSubscribe<Integer>() {
+            @Override
+            public void subscribe(MaybeEmitter<Integer> s) throws Exception {
+                calls[0]++;
+                s.onSuccess(1);
+            }
+        });
+
+        Maybe.concatArray(source, source).firstElement()
+        .test()
+        .assertResult(1);
+
+        assertEquals(1, calls[0]);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void noSubsequentSubscriptionDelayError() {
+        final int[] calls = { 0 };
+
+        Maybe<Integer> source = Maybe.create(new MaybeOnSubscribe<Integer>() {
+            @Override
+            public void subscribe(MaybeEmitter<Integer> s) throws Exception {
+                calls[0]++;
+                s.onSuccess(1);
+            }
+        });
+
+        Maybe.concatArrayDelayError(source, source).firstElement()
+        .test()
+        .assertResult(1);
+
+        assertEquals(1, calls[0]);
     }
 }

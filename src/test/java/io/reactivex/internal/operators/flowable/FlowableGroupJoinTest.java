@@ -172,7 +172,7 @@ public class FlowableGroupJoinTest {
                 });
 
         q.subscribe(
-                new Subscriber<PPF>() {
+                new FlowableSubscriber<PPF>() {
                     @Override
                     public void onNext(final PPF ppf) {
                         ppf.fruits.filter(new Predicate<PersonFruit>() {
@@ -568,7 +568,7 @@ public class FlowableGroupJoinTest {
                 }
 
                 if (!errors.isEmpty()) {
-                    TestHelper.assertError(errors, 0, TestException.class);
+                    TestHelper.assertUndeliverable(errors, 0, TestException.class);
                 }
             } finally {
                 RxJavaPlugins.reset();
@@ -641,7 +641,7 @@ public class FlowableGroupJoinTest {
                 }
 
                 if (!errors.isEmpty()) {
-                    TestHelper.assertError(errors, 0, TestException.class);
+                    TestHelper.assertUndeliverable(errors, 0, TestException.class);
                 }
             } finally {
                 RxJavaPlugins.reset();

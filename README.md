@@ -8,7 +8,7 @@ RxJava is a Java VM implementation of [Reactive Extensions](http://reactivex.io)
 
 It extends the [observer pattern](http://en.wikipedia.org/wiki/Observer_pattern) to support sequences of data/events and adds operators that allow you to compose sequences together declaratively while abstracting away concerns about things like low-level threading, synchronization, thread-safety and concurrent data structures.
 
-#### Version 1.x
+#### Version 1.x ([Javadoc](http://reactivex.io/RxJava/1.x/javadoc/))
 
 Looking for version 1.x? Jump [to the 1.x branch](https://github.com/ReactiveX/RxJava/tree/1.x).
 
@@ -17,7 +17,7 @@ Timeline plans for the 1.x line:
   - **June 1, 2017** - feature freeze (no new operators), only bugfixes
   - **March 31, 2018** - end of life, no further development
 
-#### Version 2.x
+#### Version 2.x ([Javadoc](http://reactivex.io/RxJava/2.x/javadoc/))
 
 - single dependency: [Reactive-Streams](https://github.com/reactive-streams/reactive-streams-jvm)  
 - continued support for Java 6+ & [Android](https://github.com/ReactiveX/RxAndroid) 2.3+
@@ -26,7 +26,6 @@ Timeline plans for the 1.x line:
 - non-opinionated about source of concurrency (threads, pools, event loops, fibers, actors, etc)
 - async or synchronous execution
 - virtual time and schedulers for parameterized concurrency
-
 
 Version 2.x and 1.x will live side-by-side for several years. They will have different group ids (`io.reactivex.rxjava2` vs `io.reactivex`) and namespaces (`io.reactivex` vs `rx`). 
 
@@ -57,6 +56,8 @@ public class HelloWorld {
 If your platform doesn't support Java 8 lambdas (yet), you have to create an inner class of `Consumer` manually:
 
 ```java
+import io.reactivex.functions.Consumer;
+
 Flowable.just("Hello world")
   .subscribe(new Consumer<String>() {
       @Override public void accept(String s) {
@@ -76,6 +77,8 @@ RxJava 2 features several base classes you can discover operators on:
 One of the common use cases for RxJava is to run some computation, network request on a background thread and show the results (or error) on the UI thread:
 
 ```java
+import io.reactivex.schedulers.Schedulers;
+
 Flowable.fromCallable(() -> {
     Thread.sleep(1000); //  imitate expensive computation
     return "Done";
@@ -106,7 +109,7 @@ Thread.sleep(2000);
 
 Typically, you can move computations or blocking IO to some other thread via `subscribeOn`. Once the data is ready, you can make sure they get processed on the foreground or GUI thread via `observeOn`. 
 
-RxJava operators don't work `Thread`s or `ExecutorService`s directly but with so called `Scheduler`s that abstract away sources of concurrency behind an uniform API. RxJava 2 features several standard schedulers accessible via `Schedulers` utility class. These are available on all JVM platforms but some specific platforms, such as Android, have their own typical `Scheduler`s defined: `AndroidSchedulers.mainThread()`, `SwingScheduler.instance()` or `JavaFXSchedulers.gui()`.
+RxJava operators don't work with `Thread`s or `ExecutorService`s directly but with so called `Scheduler`s that abstract away sources of concurrency behind an uniform API. RxJava 2 features several standard schedulers accessible via `Schedulers` utility class. These are available on all JVM platforms but some specific platforms, such as Android, have their own typical `Scheduler`s defined: `AndroidSchedulers.mainThread()`, `SwingScheduler.instance()` or `JavaFXSchedulers.gui()`.
 
 The `Thread.sleep(2000);` at the end is no accident. In RxJava the default `Scheduler`s run on daemon threads, which means once the Java main thread exits, they all get stopped and background computations may never happen. Sleeping for some time in this example situations let's you see the output of the flow on the console with time to spare.
 
@@ -128,12 +131,23 @@ Flowable.range(1, 10)
   .flatMap(v ->
       Flowable.just(v)
         .subscribeOn(Schedulers.computation())
-        .map(v -> v * v)
+        .map(w -> w * w)
   )
 .blockingSubscribe(System.out::println);
 ```
 
 Practically, paralellism in RxJava means running independent flows and merging their results back into a single flow. The operator `flatMap` does this by first mapping each number from 1 to 10 into its own individual `Flowable`, runs them and merges the computed squares.
+
+Starting from 2.0.5, there is an *experimental* operator `parallel()` and type `ParallelFlowable` that helps achieve the same parallel processing pattern:
+
+```java
+Flowable.range(1, 10)
+.parallel()
+.runOn(Schedulers.computation())
+.map(v -> v * v)
+.sequential()
+.blockingSubscribe(System.out::println);
+```
 
 `flatMap` is a powerful operator and helps in a lot of situations. For example, given a service that returns a `Flowable`, we'd like to call another service with values emitted by the first service:
 
@@ -160,6 +174,7 @@ For further details, consult the [wiki](https://github.com/ReactiveX/RxJava/wiki
 - Google Group: [RxJava](http://groups.google.com/d/forum/rxjava)
 - Twitter: [@RxJava](http://twitter.com/RxJava)
 - [GitHub Issues](https://github.com/ReactiveX/RxJava/issues)
+- StackOverflow: [rx-java](http://stackoverflow.com/questions/tagged/rx-java) and [rx-java2](http://stackoverflow.com/questions/tagged/rx-java2)
 
 ## Versioning
 
@@ -215,7 +230,7 @@ and for Ivy:
 <dependency org="io.reactivex.rxjava2" name="rxjava" rev="x.y.z" />
 ```
 
-Snapshots are available via [JFrog](https://oss.jfrog.org/webapp/search/artifact/?5&q=rxjava):
+Snapshots are available via [JFrog](https://oss.jfrog.org/webapp/#/home):
 
 ```groovy
 repositories {

@@ -141,7 +141,7 @@ public class ExceptionsTest {
             }
         });
         a.onNext(1);
-        assertTrue(depth.get() > MAX_STACK_DEPTH);
+        assertTrue(depth.get() >= MAX_STACK_DEPTH);
     }
 
     @Test(expected = StackOverflowError.class)
@@ -388,7 +388,7 @@ public class ExceptionsTest {
                                   public void subscribe(SingleObserver<? super Integer> s2) {
                                       throw new IllegalArgumentException("original exception");
                                   }
-                              }).toFlowable().subscribe(new Subscriber<Integer>() {
+                              }).toFlowable().subscribe(new FlowableSubscriber<Integer>() {
 
                                   @Override
                                   public void onSubscribe(Subscription s) {

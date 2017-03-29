@@ -16,6 +16,8 @@ import java.util.Arrays;
 import java.util.concurrent.atomic.*;
 
 import io.reactivex.*;
+import io.reactivex.annotations.NonNull;
+import io.reactivex.annotations.Nullable;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.exceptions.Exceptions;
 import io.reactivex.functions.Function;
@@ -33,20 +35,23 @@ import io.reactivex.plugins.RxJavaPlugins;
  */
 public final class ObservableWithLatestFromMany<T, R> extends AbstractObservableWithUpstream<T, R> {
 
+    @Nullable
     final ObservableSource<?>[] otherArray;
 
+    @Nullable
     final Iterable<? extends ObservableSource<?>> otherIterable;
 
+    @NonNull
     final Function<? super Object[], R> combiner;
 
-    public ObservableWithLatestFromMany(ObservableSource<T> source, ObservableSource<?>[] otherArray, Function<? super Object[], R> combiner) {
+    public ObservableWithLatestFromMany(@NonNull ObservableSource<T> source, @NonNull ObservableSource<?>[] otherArray, @NonNull Function<? super Object[], R> combiner) {
         super(source);
         this.otherArray = otherArray;
         this.otherIterable = null;
         this.combiner = combiner;
     }
 
-    public ObservableWithLatestFromMany(ObservableSource<T> source, Iterable<? extends ObservableSource<?>> otherIterable, Function<? super Object[], R> combiner) {
+    public ObservableWithLatestFromMany(@NonNull ObservableSource<T> source, @NonNull Iterable<? extends ObservableSource<?>> otherIterable, @NonNull Function<? super Object[], R> combiner) {
         super(source);
         this.otherArray = null;
         this.otherIterable = otherIterable;
@@ -78,12 +83,7 @@ public final class ObservableWithLatestFromMany<T, R> extends AbstractObservable
         }
 
         if (n == 0) {
-            new ObservableMap<T, R>(source, new Function<T, R>() {
-                @Override
-                public R apply(T t) throws Exception {
-                    return combiner.apply(new Object[] { t });
-                }
-            }).subscribeActual(s);
+            new ObservableMap<T, R>(source, new SingletonArrayFunc()).subscribeActual(s);
             return;
         }
 
@@ -280,6 +280,13 @@ public final class ObservableWithLatestFromMany<T, R> extends AbstractObservable
 
         public void dispose() {
             DisposableHelper.dispose(this);
+        }
+    }
+
+    final class SingletonArrayFunc implements Function<T, R> {
+        @Override
+        public R apply(T t) throws Exception {
+            return combiner.apply(new Object[] { t });
         }
     }
 }

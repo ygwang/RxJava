@@ -15,7 +15,7 @@ package io.reactivex.internal.operators.maybe;
 
 import static org.junit.Assert.*;
 
-import java.util.List;
+import java.util.*;
 
 import org.junit.Test;
 
@@ -143,11 +143,22 @@ public class MaybeZipArrayTest {
                 to.assertFailure(TestException.class);
 
                 if (!errors.isEmpty()) {
-                    TestHelper.assertError(errors, 0, TestException.class);
+                    TestHelper.assertUndeliverable(errors, 0, TestException.class);
                 }
             } finally {
                 RxJavaPlugins.reset();
             }
         }
+    }
+    @SuppressWarnings("unchecked")
+    @Test(expected = NullPointerException.class)
+    public void zipArrayOneIsNull() {
+        Maybe.zipArray(new Function<Object[], Object>() {
+            @Override
+            public Object apply(Object[] v) {
+                return 1;
+            }
+        }, Maybe.just(1), null)
+        .blockingGet();
     }
 }

@@ -14,6 +14,7 @@
 package io.reactivex.internal.operators.observable;
 
 import io.reactivex.*;
+import io.reactivex.annotations.Nullable;
 import io.reactivex.functions.*;
 import io.reactivex.internal.observers.BasicFuseableObserver;
 
@@ -82,7 +83,6 @@ public final class ObservableDistinctUntilChanged<T, K> extends AbstractObservab
             }
 
             actual.onNext(t);
-            return;
         }
 
         @Override
@@ -90,6 +90,7 @@ public final class ObservableDistinctUntilChanged<T, K> extends AbstractObservab
             return transitiveBoundaryFusion(mode);
         }
 
+        @Nullable
         @Override
         public T poll() throws Exception {
             for (;;) {

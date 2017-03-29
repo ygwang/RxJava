@@ -13,27 +13,23 @@
 
 package io.reactivex.processors;
 
-import io.reactivex.Flowable;
-import io.reactivex.TestHelper;
-import io.reactivex.exceptions.MissingBackpressureException;
-import io.reactivex.exceptions.TestException;
-import io.reactivex.functions.Consumer;
-import io.reactivex.functions.Function;
-import io.reactivex.schedulers.Schedulers;
-import io.reactivex.subscribers.DefaultSubscriber;
-import io.reactivex.subscribers.TestSubscriber;
-import org.junit.Test;
-import org.mockito.InOrder;
-import org.mockito.Mockito;
-import org.reactivestreams.Subscriber;
-import org.reactivestreams.Subscription;
+import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
+import org.junit.Test;
+import org.mockito.*;
+import org.reactivestreams.*;
+
+import io.reactivex.*;
+import io.reactivex.exceptions.*;
+import io.reactivex.functions.*;
+import io.reactivex.schedulers.Schedulers;
+import io.reactivex.subscribers.*;
 
 public class PublishProcessorTest extends FlowableProcessorTest<Object> {
 
@@ -548,7 +544,7 @@ public class PublishProcessorTest extends FlowableProcessorTest<Object> {
 
         TestSubscriber<Integer> ts = pp.test();
 
-        pp.subscribe(new Subscriber<Integer>() {
+        pp.subscribe(new FlowableSubscriber<Integer>() {
 
             @Override
             public void onSubscribe(Subscription s) {
@@ -625,5 +621,60 @@ public class PublishProcessorTest extends FlowableProcessorTest<Object> {
         }
     }
 
+    @Test
+    public void offer() {
+        PublishProcessor<Integer> pp = PublishProcessor.create();
 
+        TestSubscriber<Integer> ts = pp.test(0);
+
+        assertFalse(pp.offer(1));
+
+        ts.request(1);
+
+        assertTrue(pp.offer(1));
+
+        assertFalse(pp.offer(2));
+
+        ts.cancel();
+
+        assertTrue(pp.offer(2));
+
+        ts = pp.test(0);
+
+        assertTrue(pp.offer(null));
+
+        ts.assertFailure(NullPointerException.class);
+
+        assertTrue(pp.hasThrowable());
+        assertTrue(pp.getThrowable().toString(), pp.getThrowable() instanceof NullPointerException);
+    }
+
+    @Test
+    public void offerAsync() throws Exception {
+        final PublishProcessor<Integer> pp = PublishProcessor.create();
+
+        Schedulers.single().scheduleDirect(new Runnable() {
+            @Override
+            public void run() {
+                while (!pp.hasSubscribers()) {
+                    try {
+                        Thread.sleep(1);
+                    } catch (InterruptedException ex) {
+                        return;
+                    }
+                }
+
+                for (int i = 1; i <= 10; i++) {
+                    while (!pp.offer(i)) { }
+                }
+                pp.onComplete();
+            }
+        });
+
+        Thread.sleep(1);
+
+        pp.test()
+        .awaitDone(5, TimeUnit.SECONDS)
+        .assertResult(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+    }
 }

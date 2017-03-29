@@ -16,6 +16,7 @@ package io.reactivex.internal.operators.flowable;
 import org.reactivestreams.Subscriber;
 
 import io.reactivex.Flowable;
+import io.reactivex.annotations.Nullable;
 import io.reactivex.internal.fuseable.ConditionalSubscriber;
 import io.reactivex.internal.subscriptions.*;
 import io.reactivex.internal.util.BackpressureHelper;
@@ -59,6 +60,7 @@ public final class FlowableRange extends Flowable<Integer> {
             return mode & SYNC;
         }
 
+        @Nullable
         @Override
         public final Integer poll() {
             int i = index;

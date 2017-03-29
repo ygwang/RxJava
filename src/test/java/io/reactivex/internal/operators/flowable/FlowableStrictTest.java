@@ -21,12 +21,15 @@ import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 import org.reactivestreams.*;
 
-import io.reactivex.Flowable;
+import io.reactivex.*;
 import io.reactivex.exceptions.TestException;
+import io.reactivex.internal.subscribers.StrictSubscriber;
 import io.reactivex.internal.subscriptions.BooleanSubscription;
+import io.reactivex.processors.PublishProcessor;
 import io.reactivex.schedulers.Schedulers;
 import io.reactivex.subscribers.TestSubscriber;
 
+@Deprecated
 public class FlowableStrictTest {
 
     @Test
@@ -136,7 +139,9 @@ public class FlowableStrictTest {
         final BooleanSubscription bs1 = new BooleanSubscription();
         final BooleanSubscription bs2 = new BooleanSubscription();
 
-        TestSubscriber<Object> ts = Flowable.fromPublisher(new Publisher<Object>() {
+        final TestSubscriber<Object> ts = TestSubscriber.create();
+
+        Flowable.fromPublisher(new Publisher<Object>() {
             @Override
             public void subscribe(Subscriber<? super Object> p) {
                 p.onSubscribe(bs1);
@@ -144,8 +149,30 @@ public class FlowableStrictTest {
             }
         })
         .strict()
-        .test()
-        .assertFailure(IllegalStateException.class);
+        .subscribe(new Subscriber<Object>() {
+
+            @Override
+            public void onSubscribe(Subscription s) {
+                ts.onSubscribe(s);
+            }
+
+            @Override
+            public void onNext(Object t) {
+                ts.onNext(t);
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                ts.onError(t);
+            }
+
+            @Override
+            public void onComplete() {
+                ts.onComplete();
+            }
+        });
+
+        ts.assertFailure(IllegalStateException.class);
 
         assertTrue(bs1.isCancelled());
         assertTrue(bs2.isCancelled());
@@ -232,5 +259,50 @@ public class FlowableStrictTest {
         });
 
         assertFalse(bs.isCancelled());
+    }
+
+    @Test
+    public void normal() {
+        TestSubscriber<Integer> ts = new TestSubscriber<Integer>();
+
+        Flowable.range(1, 5)
+        .subscribe(new StrictSubscriber<Integer>(ts));
+
+        ts.assertResult(1, 2, 3, 4, 5);
+    }
+
+    @Test
+    public void badRequestOnNextRace() {
+        for (int i = 0; i < 500; i++) {
+            TestSubscriber<Integer> ts = new TestSubscriber<Integer>();
+
+            final PublishProcessor<Integer> pp = PublishProcessor.create();
+
+            final StrictSubscriber<Integer> s = new StrictSubscriber<Integer>(ts);
+
+            s.onSubscribe(new BooleanSubscription());
+
+            Runnable r1 = new Runnable() {
+                @Override
+                public void run() {
+                    pp.onNext(1);
+                }
+            };
+
+            Runnable r2 = new Runnable() {
+                @Override
+                public void run() {
+                    s.request(0);
+                }
+            };
+
+            TestHelper.race(r1, r2);
+
+            if (ts.valueCount() == 0) {
+                ts.assertFailure(IllegalArgumentException.class);
+            } else {
+                ts.assertValue(1).assertNoErrors().assertNotComplete();
+            }
+        }
     }
 }

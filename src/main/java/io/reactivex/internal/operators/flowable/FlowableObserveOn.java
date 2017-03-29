@@ -17,8 +17,9 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.reactivestreams.*;
 
-import io.reactivex.Scheduler;
+import io.reactivex.*;
 import io.reactivex.Scheduler.Worker;
+import io.reactivex.annotations.Nullable;
 import io.reactivex.exceptions.*;
 import io.reactivex.internal.fuseable.*;
 import io.reactivex.internal.queue.SpscArrayQueue;
@@ -34,7 +35,7 @@ final Scheduler scheduler;
     final int prefetch;
 
     public FlowableObserveOn(
-            Publisher<T> source,
+            Flowable<T> source,
             Scheduler scheduler,
             boolean delayError,
             int prefetch) {
@@ -58,7 +59,7 @@ final Scheduler scheduler;
 
     abstract static class BaseObserveOnSubscriber<T>
     extends BasicIntQueueSubscription<T>
-    implements Runnable, Subscriber<T> {
+    implements FlowableSubscriber<T>, Runnable {
         private static final long serialVersionUID = -8241002408341274697L;
 
         final Worker worker;
@@ -239,7 +240,7 @@ final Scheduler scheduler;
     }
 
     static final class ObserveOnSubscriber<T> extends BaseObserveOnSubscriber<T>
-    implements Subscriber<T> {
+    implements FlowableSubscriber<T> {
 
         private static final long serialVersionUID = -4547113800637756442L;
 
@@ -457,6 +458,7 @@ final Scheduler scheduler;
             }
         }
 
+        @Nullable
         @Override
         public T poll() throws Exception {
             T v = queue.poll();
@@ -695,6 +697,7 @@ final Scheduler scheduler;
             }
         }
 
+        @Nullable
         @Override
         public T poll() throws Exception {
             T v = queue.poll();

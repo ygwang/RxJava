@@ -872,7 +872,7 @@ public class MaybeTest {
             .assertNoErrors()
             .assertNotComplete();
 
-            TestHelper.assertError(list, 0, TestException.class);
+            TestHelper.assertUndeliverable(list, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }
@@ -1580,6 +1580,26 @@ public class MaybeTest {
         assertSame(Maybe.never(), Maybe.ambArray(Maybe.never()));
     }
 
+    @Test
+    public void ambWithOrder() {
+        Maybe<Integer> error = Maybe.error(new RuntimeException());
+        Maybe.just(1).ambWith(error).test().assertValue(1);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void ambIterableOrder() {
+        Maybe<Integer> error = Maybe.error(new RuntimeException());
+        Maybe.amb(Arrays.asList(Maybe.just(1), error)).test().assertValue(1);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void ambArrayOrder() {
+        Maybe<Integer> error = Maybe.error(new RuntimeException());
+        Maybe.ambArray(Maybe.just(1), error).test().assertValue(1);
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void ambArray1SignalsSuccess() {
@@ -2214,7 +2234,9 @@ public class MaybeTest {
             assertTrue(Maybe.error(new TestException())
             .subscribe().isDisposed());
 
-            TestHelper.assertError(errors, 0, TestException.class);
+            TestHelper.assertError(errors, 0, OnErrorNotImplementedException.class);
+            Throwable c = errors.get(0).getCause();
+            assertTrue("" + c, c instanceof TestException);
         } finally {
             RxJavaPlugins.reset();
         }
@@ -2657,7 +2679,7 @@ public class MaybeTest {
         try {
             Maybe.sequenceEqual(Maybe.error(new TestException("One")), Maybe.error(new TestException("Two"))).test().assertFailureAndMessage(TestException.class, "One");
 
-            TestHelper.assertError(errors, 0, TestException.class, "Two");
+            TestHelper.assertUndeliverable(errors, 0, TestException.class, "Two");
         } finally {
             RxJavaPlugins.reset();
         }

@@ -614,7 +614,7 @@ public class BehaviorProcessorTest extends DelayedFlowableProcessorTest<Object> 
         try {
             p.onError(new TestException());
 
-            TestHelper.assertError(errors, 0, TestException.class);
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }
@@ -698,5 +698,62 @@ public class BehaviorProcessorTest extends DelayedFlowableProcessorTest<Object> 
         p.test(0L, false).assertFailure(MissingBackpressureException.class);
 
         assertFalse(p.hasSubscribers());
+    }
+
+    @Test
+    public void offer() {
+        BehaviorProcessor<Integer> pp = BehaviorProcessor.create();
+
+        TestSubscriber<Integer> ts = pp.test(0);
+
+        assertFalse(pp.offer(1));
+
+        ts.request(1);
+
+        assertTrue(pp.offer(1));
+
+        assertFalse(pp.offer(2));
+
+        ts.cancel();
+
+        assertTrue(pp.offer(2));
+
+        ts = pp.test(1);
+
+        assertTrue(pp.offer(null));
+
+        ts.assertFailure(NullPointerException.class, 2);
+
+        assertTrue(pp.hasThrowable());
+        assertTrue(pp.getThrowable().toString(), pp.getThrowable() instanceof NullPointerException);
+    }
+
+    @Test
+    public void offerAsync() throws Exception {
+        final BehaviorProcessor<Integer> pp = BehaviorProcessor.create();
+
+        Schedulers.single().scheduleDirect(new Runnable() {
+            @Override
+            public void run() {
+                while (!pp.hasSubscribers()) {
+                    try {
+                        Thread.sleep(1);
+                    } catch (InterruptedException ex) {
+                        return;
+                    }
+                }
+
+                for (int i = 1; i <= 10; i++) {
+                    while (!pp.offer(i)) { }
+                }
+                pp.onComplete();
+            }
+        });
+
+        Thread.sleep(1);
+
+        pp.test()
+        .awaitDone(5, TimeUnit.SECONDS)
+        .assertResult(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
     }
 }

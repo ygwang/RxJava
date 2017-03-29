@@ -16,6 +16,7 @@ package io.reactivex.internal.operators.maybe;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicLong;
 
+import io.reactivex.annotations.Nullable;
 import org.reactivestreams.Subscriber;
 
 import io.reactivex.*;
@@ -88,12 +89,12 @@ public final class MaybeFlatMapIterableFlowable<T, R> extends Flowable<R> {
 
         @Override
         public void onSuccess(T value) {
-            Iterator<? extends R> iter;
+            Iterator<? extends R> iterator;
             boolean has;
             try {
-                iter = mapper.apply(value).iterator();
+                iterator = mapper.apply(value).iterator();
 
-                has = iter.hasNext();
+                has = iterator.hasNext();
             } catch (Throwable ex) {
                 Exceptions.throwIfFatal(ex);
                 actual.onError(ex);
@@ -105,7 +106,7 @@ public final class MaybeFlatMapIterableFlowable<T, R> extends Flowable<R> {
                 return;
             }
 
-            this.it = iter;
+            this.it = iterator;
             drain();
         }
 
@@ -135,7 +136,7 @@ public final class MaybeFlatMapIterableFlowable<T, R> extends Flowable<R> {
             d = DisposableHelper.DISPOSED;
         }
 
-        void fastPath(Subscriber<? super R> a, Iterator<? extends R> iter) {
+        void fastPath(Subscriber<? super R> a, Iterator<? extends R> iterator) {
             for (;;) {
                 if (cancelled) {
                     return;
@@ -144,7 +145,7 @@ public final class MaybeFlatMapIterableFlowable<T, R> extends Flowable<R> {
                 R v;
 
                 try {
-                    v = iter.next();
+                    v = iterator.next();
                 } catch (Throwable ex) {
                     Exceptions.throwIfFatal(ex);
                     a.onError(ex);
@@ -161,7 +162,7 @@ public final class MaybeFlatMapIterableFlowable<T, R> extends Flowable<R> {
                 boolean b;
 
                 try {
-                    b = iter.hasNext();
+                    b = iterator.hasNext();
                 } catch (Throwable ex) {
                     Exceptions.throwIfFatal(ex);
                     a.onError(ex);
@@ -181,9 +182,9 @@ public final class MaybeFlatMapIterableFlowable<T, R> extends Flowable<R> {
             }
 
             Subscriber<? super R> a = actual;
-            Iterator<? extends R> iter = this.it;
+            Iterator<? extends R> iterator = this.it;
 
-            if (outputFused && iter != null) {
+            if (outputFused && iterator != null) {
                 a.onNext(null);
                 a.onComplete();
                 return;
@@ -193,11 +194,11 @@ public final class MaybeFlatMapIterableFlowable<T, R> extends Flowable<R> {
 
             for (;;) {
 
-                if (iter != null) {
+                if (iterator != null) {
                     long r = requested.get();
 
                     if (r == Long.MAX_VALUE) {
-                        fastPath(a, iter);
+                        fastPath(a, iterator);
                         return;
                     }
 
@@ -211,7 +212,7 @@ public final class MaybeFlatMapIterableFlowable<T, R> extends Flowable<R> {
                         R v;
 
                         try {
-                            v = ObjectHelper.requireNonNull(iter.next(), "The iterator returned a null value");
+                            v = ObjectHelper.requireNonNull(iterator.next(), "The iterator returned a null value");
                         } catch (Throwable ex) {
                             Exceptions.throwIfFatal(ex);
                             a.onError(ex);
@@ -229,7 +230,7 @@ public final class MaybeFlatMapIterableFlowable<T, R> extends Flowable<R> {
                         boolean b;
 
                         try {
-                            b = iter.hasNext();
+                            b = iterator.hasNext();
                         } catch (Throwable ex) {
                             Exceptions.throwIfFatal(ex);
                             a.onError(ex);
@@ -252,8 +253,8 @@ public final class MaybeFlatMapIterableFlowable<T, R> extends Flowable<R> {
                     break;
                 }
 
-                if (iter == null) {
-                    iter = it;
+                if (iterator == null) {
+                    iterator = it;
                 }
             }
         }
@@ -277,13 +278,14 @@ public final class MaybeFlatMapIterableFlowable<T, R> extends Flowable<R> {
             return it == null;
         }
 
+        @Nullable
         @Override
         public R poll() throws Exception {
-            Iterator<? extends R> iter = it;
+            Iterator<? extends R> iterator = it;
 
-            if (iter != null) {
-                R v = ObjectHelper.requireNonNull(iter.next(), "The iterator returned a null value");
-                if (!iter.hasNext()) {
+            if (iterator != null) {
+                R v = ObjectHelper.requireNonNull(iterator.next(), "The iterator returned a null value");
+                if (!iterator.hasNext()) {
                     it = null;
                 }
                 return v;

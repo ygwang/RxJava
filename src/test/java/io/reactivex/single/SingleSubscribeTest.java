@@ -140,7 +140,7 @@ public class SingleSubscribeTest {
                 }
             });
 
-            TestHelper.assertError(list, 0, TestException.class);
+            TestHelper.assertUndeliverable(list, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }
@@ -181,7 +181,7 @@ public class SingleSubscribeTest {
                 }
             });
 
-            TestHelper.assertError(list, 0, TestException.class);
+            TestHelper.assertUndeliverable(list, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }
@@ -216,5 +216,15 @@ public class SingleSubscribeTest {
         ps.single(-99).test(false);
 
         assertTrue(ps.hasObservers());
+    }
+
+    @Test
+    public void successIsDisposed() {
+        assertTrue(Single.just(1).subscribe().isDisposed());
+    }
+
+    @Test
+    public void errorIsDisposed() {
+        assertTrue(Single.error(new TestException()).subscribe(Functions.emptyConsumer(), Functions.emptyConsumer()).isDisposed());
     }
 }

@@ -15,7 +15,8 @@ package io.reactivex.internal.operators.flowable;
 
 import org.reactivestreams.*;
 
-import io.reactivex.annotations.Experimental;
+import io.reactivex.*;
+import io.reactivex.annotations.*;
 import io.reactivex.exceptions.Exceptions;
 import io.reactivex.functions.Action;
 import io.reactivex.internal.fuseable.*;
@@ -33,7 +34,7 @@ public final class FlowableDoFinally<T> extends AbstractFlowableWithUpstream<T, 
 
     final Action onFinally;
 
-    public FlowableDoFinally(Publisher<T> source, Action onFinally) {
+    public FlowableDoFinally(Flowable<T> source, Action onFinally) {
         super(source);
         this.onFinally = onFinally;
     }
@@ -47,7 +48,7 @@ public final class FlowableDoFinally<T> extends AbstractFlowableWithUpstream<T, 
         }
     }
 
-    static final class DoFinallySubscriber<T> extends BasicIntQueueSubscription<T> implements Subscriber<T> {
+    static final class DoFinallySubscriber<T> extends BasicIntQueueSubscription<T> implements FlowableSubscriber<T> {
 
         private static final long serialVersionUID = 4109457741734051389L;
 
@@ -130,6 +131,7 @@ public final class FlowableDoFinally<T> extends AbstractFlowableWithUpstream<T, 
             return qs.isEmpty();
         }
 
+        @Nullable
         @Override
         public T poll() throws Exception {
             T v = qs.poll();
@@ -239,6 +241,7 @@ public final class FlowableDoFinally<T> extends AbstractFlowableWithUpstream<T, 
             return qs.isEmpty();
         }
 
+        @Nullable
         @Override
         public T poll() throws Exception {
             T v = qs.poll();

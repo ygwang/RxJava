@@ -10,24 +10,32 @@
  * distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See
  * the License for the specific language governing permissions and limitations under the License.
  */
+package io.reactivex.internal.operators.single;
 
-package io.reactivex.tck;
+import java.util.concurrent.Callable;
 
-import io.reactivex.Flowable;
+import org.junit.Test;
 
-public final class FlowableTck {
-    /** Utility class (remnant).*/
-    private FlowableTck() {
-        throw new IllegalStateException("No instances!");
+import io.reactivex.*;
+
+public class SingleConcatPublisherTest {
+
+    @Test
+    public void scalar() {
+        Single.concat(Flowable.just(Single.just(1)))
+        .test()
+        .assertResult(1);
     }
 
-    /**
-     * Enable strict mode.
-     * @param <T> the value type
-     * @param f the input Flowable
-     * @return the output Flowable
-     */
-    public static <T> Flowable<T> wrap(Flowable<T> f) {
-        return f.strict();
+    @Test
+    public void callable() {
+        Single.concat(Flowable.fromCallable(new Callable<Single<Integer>>() {
+            @Override
+            public Single<Integer> call() throws Exception {
+                return Single.just(1);
+            }
+        }))
+        .test()
+        .assertResult(1);
     }
 }

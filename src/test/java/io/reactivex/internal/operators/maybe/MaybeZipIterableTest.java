@@ -145,7 +145,7 @@ public class MaybeZipIterableTest {
                 to.assertFailure(TestException.class);
 
                 if (!errors.isEmpty()) {
-                    TestHelper.assertError(errors, 0, TestException.class);
+                    TestHelper.assertUndeliverable(errors, 0, TestException.class);
                 }
             } finally {
                 RxJavaPlugins.reset();
@@ -187,5 +187,29 @@ public class MaybeZipIterableTest {
         }), addString)
         .test()
         .assertFailureAndMessage(TestException.class, "next()");
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test(expected = NullPointerException.class)
+    public void zipIterableOneIsNull() {
+        Maybe.zip(Arrays.asList(null, Maybe.just(1)), new Function<Object[], Object>() {
+            @Override
+            public Object apply(Object[] v) {
+                return 1;
+            }
+        })
+        .blockingGet();
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test(expected = NullPointerException.class)
+    public void zipIterableTwoIsNull() {
+        Maybe.zip(Arrays.asList(Maybe.just(1), null), new Function<Object[], Object>() {
+            @Override
+            public Object apply(Object[] v) {
+                return 1;
+            }
+        })
+        .blockingGet();
     }
 }

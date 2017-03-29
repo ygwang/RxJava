@@ -542,12 +542,12 @@ public class FlowableConcatMapEagerTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testInvalidCapacityHint() {
+    public void testInvalidMaxConcurrent() {
         Flowable.just(1).concatMapEager(toJust, 0, Flowable.bufferSize());
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testInvalidMaxConcurrent() {
+    public void testInvalidCapacityHint() {
         Flowable.just(1).concatMapEager(toJust, Flowable.bufferSize(), 0);
     }
 
@@ -900,7 +900,7 @@ public class FlowableConcatMapEagerTest {
                 } else {
                     to.assertError(TestException.class);
                     if (!errors.isEmpty()) {
-                        TestHelper.assertError(errors, 0, TestException.class);
+                        TestHelper.assertUndeliverable(errors, 0, TestException.class);
                     }
                 }
             } finally {
@@ -1084,7 +1084,7 @@ public class FlowableConcatMapEagerTest {
 
             sub[0].onError(new TestException("Second"));
 
-            TestHelper.assertError(errors, 0, TestException.class, "Second");
+            TestHelper.assertUndeliverable(errors, 0, TestException.class, "Second");
         } finally {
             RxJavaPlugins.reset();
         }
@@ -1112,7 +1112,7 @@ public class FlowableConcatMapEagerTest {
             .test(0L)
             .assertFailure(MissingBackpressureException.class);
 
-            TestHelper.assertError(errors, 0, TestException.class);
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }

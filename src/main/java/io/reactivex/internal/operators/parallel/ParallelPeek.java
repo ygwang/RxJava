@@ -15,6 +15,7 @@ package io.reactivex.internal.operators.parallel;
 
 import org.reactivestreams.*;
 
+import io.reactivex.FlowableSubscriber;
 import io.reactivex.exceptions.*;
 import io.reactivex.functions.*;
 import io.reactivex.internal.functions.ObjectHelper;
@@ -84,7 +85,7 @@ public final class ParallelPeek<T> extends ParallelFlowable<T> {
         return source.parallelism();
     }
 
-    static final class ParallelPeekSubscriber<T> implements Subscriber<T>, Subscription {
+    static final class ParallelPeekSubscriber<T> implements FlowableSubscriber<T>, Subscription {
 
         final Subscriber<? super T> actual;
 
@@ -158,7 +159,6 @@ public final class ParallelPeek<T> extends ParallelFlowable<T> {
                 } catch (Throwable ex) {
                     Exceptions.throwIfFatal(ex);
                     onError(ex);
-                    return;
                 }
             }
         }

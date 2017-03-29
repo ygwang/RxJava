@@ -28,6 +28,7 @@ import io.reactivex.*;
 import io.reactivex.Observable;
 import io.reactivex.Observer;
 import io.reactivex.Scheduler.Worker;
+import io.reactivex.annotations.NonNull;
 import io.reactivex.disposables.*;
 import io.reactivex.exceptions.TestException;
 import io.reactivex.functions.*;
@@ -174,7 +175,7 @@ public class ObservableReplayTest {
             InOrder inOrder = inOrder(observer1);
 
             co.subscribe(observer1);
-            inOrder.verify(observer1, times(1)).onNext(3);
+            inOrder.verify(observer1, never()).onNext(3);
 
             inOrder.verify(observer1, times(1)).onComplete();
             inOrder.verifyNoMoreInteractions();
@@ -450,7 +451,7 @@ public class ObservableReplayTest {
             InOrder inOrder = inOrder(observer1);
 
             co.subscribe(observer1);
-            inOrder.verify(observer1, times(1)).onNext(3);
+            inOrder.verify(observer1, never()).onNext(3);
 
             inOrder.verify(observer1, times(1)).onError(any(RuntimeException.class));
             inOrder.verifyNoMoreInteractions();
@@ -689,14 +690,16 @@ public class ObservableReplayTest {
             this.mockDisposable = mockDisposable;
         }
 
+        @NonNull
         @Override
-        public Disposable schedule(Runnable action) {
+        public Disposable schedule(@NonNull Runnable action) {
             action.run();
             return mockDisposable; // this subscription is returned but discarded
         }
 
+        @NonNull
         @Override
-        public Disposable schedule(Runnable action, long delayTime, TimeUnit unit) {
+        public Disposable schedule(@NonNull Runnable action, long delayTime, @NonNull TimeUnit unit) {
             action.run();
             return mockDisposable;
         }
@@ -759,7 +762,7 @@ public class ObservableReplayTest {
         buf.next(2);
         test.advanceTimeBy(1, TimeUnit.SECONDS);
         buf.collect(values);
-        Assert.assertEquals(Arrays.asList(1, 2), values);
+        Assert.assertEquals(Arrays.asList(2), values);
 
         buf.next(3);
         buf.next(4);
@@ -802,7 +805,7 @@ public class ObservableReplayTest {
         buf.next(2);
         test.advanceTimeBy(1, TimeUnit.SECONDS);
         buf.collect(values);
-        Assert.assertEquals(Arrays.asList(1, 2), values);
+        Assert.assertEquals(Arrays.asList(2), values);
 
         buf.next(3);
         buf.next(4);
@@ -1307,7 +1310,7 @@ public class ObservableReplayTest {
             .test()
             .assertFailureAndMessage(TestException.class, "First");
 
-            TestHelper.assertError(errors, 0, TestException.class, "Second");
+            TestHelper.assertUndeliverable(errors, 0, TestException.class, "Second");
         } finally {
             RxJavaPlugins.reset();
         }
@@ -1486,5 +1489,43 @@ public class ObservableReplayTest {
         ps.onNext(1);
 
         to.assertValues(1);
+    }
+
+    @Test
+    public void delayedUpstreamOnSubscribe() {
+        final Observer<?>[] sub = { null };
+
+        new Observable<Integer>() {
+            @Override
+            protected void subscribeActual(Observer<? super Integer> s) {
+                sub[0] = s;
+            }
+        }
+        .replay()
+        .connect()
+        .dispose();
+
+        Disposable bs = Disposables.empty();
+
+        sub[0].onSubscribe(bs);
+
+        assertTrue(bs.isDisposed());
+    }
+
+    @Test
+    public void timedNoOutdatedData() {
+        TestScheduler scheduler = new TestScheduler();
+
+        Observable<Integer> source = Observable.just(1)
+                .replay(2, TimeUnit.SECONDS, scheduler)
+                .autoConnect();
+
+        source.test().assertResult(1);
+
+        source.test().assertResult(1);
+
+        scheduler.advanceTimeBy(3, TimeUnit.SECONDS);
+
+        source.test().assertResult();
     }
 }

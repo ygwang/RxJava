@@ -14,8 +14,10 @@
 
 package io.reactivex.internal.operators.flowable;
 
-import org.reactivestreams.*;
+import org.reactivestreams.Subscriber;
 
+import io.reactivex.Flowable;
+import io.reactivex.annotations.Nullable;
 import io.reactivex.functions.Function;
 import io.reactivex.internal.functions.ObjectHelper;
 import io.reactivex.internal.fuseable.ConditionalSubscriber;
@@ -23,7 +25,7 @@ import io.reactivex.internal.subscribers.*;
 
 public final class FlowableMap<T, U> extends AbstractFlowableWithUpstream<T, U> {
     final Function<? super T, ? extends U> mapper;
-    public FlowableMap(Publisher<T> source, Function<? super T, ? extends U> mapper) {
+    public FlowableMap(Flowable<T> source, Function<? super T, ? extends U> mapper) {
         super(source);
         this.mapper = mapper;
     }
@@ -72,6 +74,7 @@ public final class FlowableMap<T, U> extends AbstractFlowableWithUpstream<T, U> 
             return transitiveBoundaryFusion(mode);
         }
 
+        @Nullable
         @Override
         public U poll() throws Exception {
             T t = qs.poll();
@@ -131,6 +134,7 @@ public final class FlowableMap<T, U> extends AbstractFlowableWithUpstream<T, U> 
             return transitiveBoundaryFusion(mode);
         }
 
+        @Nullable
         @Override
         public U poll() throws Exception {
             T t = qs.poll();

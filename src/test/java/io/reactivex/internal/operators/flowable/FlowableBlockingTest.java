@@ -127,7 +127,7 @@ public class FlowableBlockingTest {
 
         Flowable.range(1, 5)
         .subscribeOn(Schedulers.computation())
-        .blockingSubscribe(new Subscriber<Object>() {
+        .blockingSubscribe(new FlowableSubscriber<Object>() {
 
             @Override
             public void onSubscribe(Subscription d) {
@@ -162,7 +162,7 @@ public class FlowableBlockingTest {
 
         Flowable.range(1, 5).concatWith(Flowable.<Integer>error(ex))
         .subscribeOn(Schedulers.computation())
-        .blockingSubscribe(new Subscriber<Object>() {
+        .blockingSubscribe(new FlowableSubscriber<Object>() {
 
             @Override
             public void onSubscribe(Subscription d) {
@@ -249,7 +249,7 @@ public class FlowableBlockingTest {
 
             assertEquals(1, source.blockingFirst().intValue());
 
-            TestHelper.assertError(list, 0, TestException.class);
+            TestHelper.assertUndeliverable(list, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }

@@ -19,6 +19,8 @@ import java.util.concurrent.atomic.*;
 
 import org.reactivestreams.*;
 
+import io.reactivex.*;
+import io.reactivex.annotations.Nullable;
 import io.reactivex.exceptions.*;
 import io.reactivex.functions.Function;
 import io.reactivex.internal.fuseable.*;
@@ -33,7 +35,7 @@ public final class FlowableFlattenIterable<T, R> extends AbstractFlowableWithUps
 
     final int prefetch;
 
-    public FlowableFlattenIterable(Publisher<T> source,
+    public FlowableFlattenIterable(Flowable<T> source,
             Function<? super T, ? extends Iterable<? extends R>> mapper, int prefetch) {
         super(source);
         this.mapper = mapper;
@@ -80,7 +82,7 @@ public final class FlowableFlattenIterable<T, R> extends AbstractFlowableWithUps
 
     static final class FlattenIterableSubscriber<T, R>
     extends BasicIntQueueSubscription<R>
-    implements Subscriber<T> {
+    implements FlowableSubscriber<T> {
 
 
         private static final long serialVersionUID = -3096000382929934955L;
@@ -268,7 +270,6 @@ public final class FlowableFlattenIterable<T, R> extends AbstractFlowableWithUps
                         } catch (Throwable ex) {
                             Exceptions.throwIfFatal(ex);
                             s.cancel();
-                            it = null;
                             ExceptionHelper.addThrowable(error, ex);
                             ex = ExceptionHelper.terminate(error);
                             a.onError(ex);
@@ -413,6 +414,7 @@ public final class FlowableFlattenIterable<T, R> extends AbstractFlowableWithUps
             return (it != null && !it.hasNext()) || queue.isEmpty();
         }
 
+        @Nullable
         @Override
         public R poll() throws Exception {
             Iterator<? extends R> it = current;

@@ -202,7 +202,7 @@ public class SingleAmbTest {
                 TestHelper.race(r1, r2, Schedulers.single());
 
                 if (!errors.isEmpty()) {
-                    TestHelper.assertError(errors, 0, TestException.class);
+                    TestHelper.assertUndeliverable(errors, 0, TestException.class);
                 }
             } finally {
                 RxJavaPlugins.reset();
@@ -243,7 +243,7 @@ public class SingleAmbTest {
                 TestHelper.race(r1, r2, Schedulers.single());
 
                 if (!errors.isEmpty()) {
-                    TestHelper.assertError(errors, 0, TestException.class);
+                    TestHelper.assertUndeliverable(errors, 0, TestException.class);
                 }
             } finally {
                 RxJavaPlugins.reset();
@@ -260,5 +260,25 @@ public class SingleAmbTest {
         Single.amb(Arrays.asList(sources))
         .test()
         .assertResult(31);
+    }
+
+    @Test
+    public void ambWithOrder() {
+        Single<Integer> error = Single.error(new RuntimeException());
+        Single.just(1).ambWith(error).test().assertValue(1);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void ambIterableOrder() {
+        Single<Integer> error = Single.error(new RuntimeException());
+        Single.amb(Arrays.asList(Single.just(1), error)).test().assertValue(1);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void ambArrayOrder() {
+        Single<Integer> error = Single.error(new RuntimeException());
+        Single.ambArray(Single.just(1), error).test().assertValue(1);
     }
 }

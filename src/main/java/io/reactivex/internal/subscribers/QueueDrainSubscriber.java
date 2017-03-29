@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.*;
 
 import org.reactivestreams.Subscriber;
 
+import io.reactivex.FlowableSubscriber;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.exceptions.MissingBackpressureException;
 import io.reactivex.internal.fuseable.*;
@@ -31,7 +32,7 @@ import io.reactivex.internal.util.*;
  * @param <U> the value type in the queue
  * @param <V> the value type the child subscriber accepts
  */
-public abstract class QueueDrainSubscriber<T, U, V> extends QueueDrainSubscriberPad4 implements Subscriber<T>, QueueDrain<U, V> {
+public abstract class QueueDrainSubscriber<T, U, V> extends QueueDrainSubscriberPad4 implements FlowableSubscriber<T>, QueueDrain<U, V> {
     protected final Subscriber<? super V> actual;
     protected final SimplePlainQueue<U> queue;
 
@@ -95,7 +96,7 @@ public abstract class QueueDrainSubscriber<T, U, V> extends QueueDrainSubscriber
 
     protected final void fastPathOrderedEmitMax(U value, boolean delayError, Disposable dispose) {
         final Subscriber<? super V> s = actual;
-        final SimpleQueue<U> q = queue;
+        final SimplePlainQueue<U> q = queue;
 
         if (wip.get() == 0 && wip.compareAndSet(0, 1)) {
             long r = requested.get();
@@ -158,11 +159,6 @@ public abstract class QueueDrainSubscriber<T, U, V> extends QueueDrainSubscriber
         }
     }
 
-    public void drain(boolean delayError) {
-        if (enter()) {
-            QueueDrainHelper.drainLoop(queue, actual, delayError, this);
-        }
-    }
 }
 
 // -------------------------------------------------------------------

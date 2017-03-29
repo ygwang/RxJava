@@ -33,7 +33,7 @@ public final class FlowableSubscribeOn<T> extends AbstractFlowableWithUpstream<T
 
     final boolean nonScheduledRequests;
 
-    public FlowableSubscribeOn(Publisher<T> source, Scheduler scheduler, boolean nonScheduledRequests) {
+    public FlowableSubscribeOn(Flowable<T> source, Scheduler scheduler, boolean nonScheduledRequests) {
         super(source);
         this.scheduler = scheduler;
         this.nonScheduledRequests = nonScheduledRequests;
@@ -49,7 +49,7 @@ public final class FlowableSubscribeOn<T> extends AbstractFlowableWithUpstream<T
     }
 
     static final class SubscribeOnSubscriber<T> extends AtomicReference<Thread>
-    implements Subscriber<T>, Subscription, Runnable {
+    implements FlowableSubscriber<T>, Subscription, Runnable {
 
         private static final long serialVersionUID = 8094547886072529208L;
 
@@ -132,12 +132,7 @@ public final class FlowableSubscribeOn<T> extends AbstractFlowableWithUpstream<T
             if (nonScheduledRequests || Thread.currentThread() == get()) {
                 s.request(n);
             } else {
-                worker.schedule(new Runnable() {
-                    @Override
-                    public void run() {
-                        s.request(n);
-                    }
-                });
+                worker.schedule(new Request(s, n));
             }
         }
 
@@ -145,6 +140,21 @@ public final class FlowableSubscribeOn<T> extends AbstractFlowableWithUpstream<T
         public void cancel() {
             SubscriptionHelper.cancel(s);
             worker.dispose();
+        }
+
+        static final class Request implements Runnable {
+            private final Subscription s;
+            private final long n;
+
+            Request(Subscription s, long n) {
+                this.s = s;
+                this.n = n;
+            }
+
+            @Override
+            public void run() {
+                s.request(n);
+            }
         }
     }
 }

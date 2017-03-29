@@ -15,12 +15,13 @@
  */
 package io.reactivex.internal.schedulers;
 
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicReference;
-
 import io.reactivex.Scheduler;
+import io.reactivex.annotations.NonNull;
 import io.reactivex.disposables.*;
 import io.reactivex.internal.disposables.*;
+
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Holds a fixed pool of worker threads and assigns them
@@ -28,7 +29,7 @@ import io.reactivex.internal.disposables.*;
  */
 public final class ComputationScheduler extends Scheduler {
     /** This will indicate no pool is active. */
-    static final FixedSchedulerPool NONE = new FixedSchedulerPool(0);
+    static final FixedSchedulerPool NONE;
     /** Manages a fixed number of workers. */
     private static final String THREAD_NAME_PREFIX = "RxComputationThreadPool";
     static final RxThreadFactory THREAD_FACTORY;
@@ -42,6 +43,7 @@ public final class ComputationScheduler extends Scheduler {
 
     static final PoolWorker SHUTDOWN_WORKER;
 
+    final ThreadFactory threadFactory;
     final AtomicReference<FixedSchedulerPool> pool;
     /** The name of the system property for setting the thread priority for this Scheduler. */
     private static final String KEY_COMPUTATION_PRIORITY = "rx2.computation-priority";
@@ -55,7 +57,10 @@ public final class ComputationScheduler extends Scheduler {
         int priority = Math.max(Thread.MIN_PRIORITY, Math.min(Thread.MAX_PRIORITY,
                 Integer.getInteger(KEY_COMPUTATION_PRIORITY, Thread.NORM_PRIORITY)));
 
-        THREAD_FACTORY = new RxThreadFactory(THREAD_NAME_PREFIX, priority);
+        THREAD_FACTORY = new RxThreadFactory(THREAD_NAME_PREFIX, priority, true);
+
+        NONE = new FixedSchedulerPool(0, THREAD_FACTORY);
+        NONE.shutdown();
     }
 
     static int cap(int cpuCount, int paramThreads) {
@@ -68,12 +73,12 @@ public final class ComputationScheduler extends Scheduler {
         final PoolWorker[] eventLoops;
         long n;
 
-        FixedSchedulerPool(int maxThreads) {
+        FixedSchedulerPool(int maxThreads, ThreadFactory threadFactory) {
             // initialize event loops
             this.cores = maxThreads;
             this.eventLoops = new PoolWorker[maxThreads];
             for (int i = 0; i < maxThreads; i++) {
-                this.eventLoops[i] = new PoolWorker(THREAD_FACTORY);
+                this.eventLoops[i] = new PoolWorker(threadFactory);
             }
         }
 
@@ -98,30 +103,45 @@ public final class ComputationScheduler extends Scheduler {
      * count and using least-recent worker selection policy.
      */
     public ComputationScheduler() {
+        this(THREAD_FACTORY);
+    }
+
+    /**
+     * Create a scheduler with pool size equal to the available processor
+     * count and using least-recent worker selection policy.
+     *
+     * @param threadFactory thread factory to use for creating worker threads. Note that this takes precedence over any
+     *                      system properties for configuring new thread creation. Cannot be null.
+     */
+    public ComputationScheduler(ThreadFactory threadFactory) {
+        this.threadFactory = threadFactory;
         this.pool = new AtomicReference<FixedSchedulerPool>(NONE);
         start();
     }
 
+    @NonNull
     @Override
     public Worker createWorker() {
         return new EventLoopWorker(pool.get().getEventLoop());
     }
 
+    @NonNull
     @Override
-    public Disposable scheduleDirect(Runnable run, long delay, TimeUnit unit) {
+    public Disposable scheduleDirect(@NonNull Runnable run, long delay, TimeUnit unit) {
         PoolWorker w = pool.get().getEventLoop();
         return w.scheduleDirect(run, delay, unit);
     }
 
+    @NonNull
     @Override
-    public Disposable schedulePeriodicallyDirect(Runnable run, long initialDelay, long period, TimeUnit unit) {
+    public Disposable schedulePeriodicallyDirect(@NonNull Runnable run, long initialDelay, long period, TimeUnit unit) {
         PoolWorker w = pool.get().getEventLoop();
         return w.schedulePeriodicallyDirect(run, initialDelay, period, unit);
     }
 
     @Override
     public void start() {
-        FixedSchedulerPool update = new FixedSchedulerPool(MAX_THREADS);
+        FixedSchedulerPool update = new FixedSchedulerPool(MAX_THREADS, threadFactory);
         if (!pool.compareAndSet(NONE, update)) {
             update.shutdown();
         }
@@ -172,16 +192,18 @@ public final class ComputationScheduler extends Scheduler {
             return disposed;
         }
 
+        @NonNull
         @Override
-        public Disposable schedule(Runnable action) {
+        public Disposable schedule(@NonNull Runnable action) {
             if (disposed) {
                 return EmptyDisposable.INSTANCE;
             }
 
-            return poolWorker.scheduleActual(action, 0, null, serial);
+            return poolWorker.scheduleActual(action, 0, TimeUnit.MILLISECONDS, serial);
         }
+        @NonNull
         @Override
-        public Disposable schedule(Runnable action, long delayTime, TimeUnit unit) {
+        public Disposable schedule(@NonNull Runnable action, long delayTime, @NonNull TimeUnit unit) {
             if (disposed) {
                 return EmptyDisposable.INSTANCE;
             }

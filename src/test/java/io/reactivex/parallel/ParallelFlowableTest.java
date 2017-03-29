@@ -744,7 +744,8 @@ public class ParallelFlowableTest {
                 .map(Functions.<Integer>identity())
                 .sequential(prefetch)
                 .test()
-                .awaitDone(10, TimeUnit.SECONDS)
+                .withTag("parallelism = " + parallelism + ", prefetch = " + prefetch)
+                .awaitDone(30, TimeUnit.SECONDS)
                 .assertSubscribed()
                 .assertValueCount(1024 * 1024)
                 .assertNoErrors()
@@ -803,7 +804,7 @@ public class ParallelFlowableTest {
     @Test
     public void filterThrows() throws Exception {
         final boolean[] cancelled = { false };
-        Flowable.range(1, 20)
+        Flowable.range(1, 20).concatWith(Flowable.<Integer>never())
         .doOnCancel(new Action() {
             @Override
             public void run() throws Exception {
@@ -912,6 +913,9 @@ public class ParallelFlowableTest {
 
             Thread.sleep(300);
 
+            for (Throwable ex : errors) {
+                ex.printStackTrace();
+            }
             assertTrue(errors.toString(), errors.isEmpty());
         } finally {
             RxJavaPlugins.reset();
@@ -1112,9 +1116,9 @@ public class ParallelFlowableTest {
     public void compose() {
         Flowable.range(1, 5)
         .parallel()
-        .compose(new Function<ParallelFlowable<Integer>, ParallelFlowable<Integer>>() {
+        .compose(new ParallelTransformer<Integer, Integer>() {
             @Override
-            public ParallelFlowable<Integer> apply(ParallelFlowable<Integer> pf) throws Exception {
+            public ParallelFlowable<Integer> apply(ParallelFlowable<Integer> pf) {
                 return pf.map(new Function<Integer, Integer>() {
                     @Override
                     public Integer apply(Integer v) throws Exception {

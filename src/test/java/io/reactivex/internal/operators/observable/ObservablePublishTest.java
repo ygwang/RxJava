@@ -598,7 +598,7 @@ public class ObservablePublishTest {
             .test()
             .assertResult(1);
 
-            TestHelper.assertError(errors, 0, TestException.class);
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }
@@ -612,7 +612,7 @@ public class ObservablePublishTest {
 
             co.connect();
 
-            TestHelper.assertError(errors, 0, TestException.class);
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }
@@ -698,5 +698,26 @@ public class ObservablePublishTest {
         .assertFailure(TestException.class);
 
         assertFalse(ps.hasObservers());
+    }
+
+    @Test
+    public void delayedUpstreamOnSubscribe() {
+        final Observer<?>[] sub = { null };
+
+        new Observable<Integer>() {
+            @Override
+            protected void subscribeActual(Observer<? super Integer> s) {
+                sub[0] = s;
+            }
+        }
+        .publish()
+        .connect()
+        .dispose();
+
+        Disposable bs = Disposables.empty();
+
+        sub[0].onSubscribe(bs);
+
+        assertTrue(bs.isDisposed());
     }
 }

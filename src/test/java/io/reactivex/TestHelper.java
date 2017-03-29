@@ -38,6 +38,7 @@ import io.reactivex.internal.operators.single.SingleToFlowable;
 import io.reactivex.internal.subscriptions.BooleanSubscription;
 import io.reactivex.internal.util.ExceptionHelper;
 import io.reactivex.observers.TestObserver;
+import io.reactivex.parallel.ParallelFlowable;
 import io.reactivex.plugins.RxJavaPlugins;
 import io.reactivex.processors.PublishProcessor;
 import io.reactivex.schedulers.Schedulers;
@@ -55,8 +56,8 @@ public enum TestHelper {
      * @return the mocked subscriber
      */
     @SuppressWarnings("unchecked")
-    public static <T> Subscriber<T> mockSubscriber() {
-        Subscriber<T> w = mock(Subscriber.class);
+    public static <T> FlowableSubscriber<T> mockSubscriber() {
+        FlowableSubscriber<T> w = mock(FlowableSubscriber.class);
 
         Mockito.doAnswer(new Answer<Object>() {
             @Override
@@ -154,11 +155,46 @@ public enum TestHelper {
         }
     }
 
+    public static void assertUndeliverable(List<Throwable> list, int index, Class<? extends Throwable> clazz) {
+        Throwable ex = list.get(index);
+        if (!(ex instanceof UndeliverableException)) {
+            AssertionError err = new AssertionError("Outer exception UndeliverableException expected but got " + list.get(index));
+            err.initCause(list.get(index));
+            throw err;
+        }
+        ex = ex.getCause();
+        if (!clazz.isInstance(ex)) {
+            AssertionError err = new AssertionError("Inner exception " + clazz + " expected but got " + list.get(index));
+            err.initCause(list.get(index));
+            throw err;
+        }
+    }
+
     public static void assertError(List<Throwable> list, int index, Class<? extends Throwable> clazz, String message) {
         Throwable ex = list.get(index);
         if (!clazz.isInstance(ex)) {
             AssertionError err = new AssertionError("Type " + clazz + " expected but got " + ex);
             err.initCause(ex);
+            throw err;
+        }
+        if (!ObjectHelper.equals(message, ex.getMessage())) {
+            AssertionError err = new AssertionError("Message " + message + " expected but got " + ex.getMessage());
+            err.initCause(ex);
+            throw err;
+        }
+    }
+
+    public static void assertUndeliverable(List<Throwable> list, int index, Class<? extends Throwable> clazz, String message) {
+        Throwable ex = list.get(index);
+        if (!(ex instanceof UndeliverableException)) {
+            AssertionError err = new AssertionError("Outer exception UndeliverableException expected but got " + list.get(index));
+            err.initCause(list.get(index));
+            throw err;
+        }
+        ex = ex.getCause();
+        if (!clazz.isInstance(ex)) {
+            AssertionError err = new AssertionError("Inner exception " + clazz + " expected but got " + list.get(index));
+            err.initCause(list.get(index));
             throw err;
         }
         if (!ObjectHelper.equals(message, ex.getMessage())) {
@@ -260,7 +296,7 @@ public enum TestHelper {
         try {
             final CountDownLatch cdl = new CountDownLatch(1);
 
-            source.subscribe(new Subscriber<Object>() {
+            source.subscribe(new FlowableSubscriber<Object>() {
 
                 @Override
                 public void onSubscribe(Subscription s) {
@@ -386,6 +422,9 @@ public enum TestHelper {
      * @return the list of Throwables
      */
     public static List<Throwable> compositeList(Throwable ex) {
+        if (ex instanceof UndeliverableException) {
+            ex = ex.getCause();
+        }
         return ((CompositeException)ex).getExceptions();
     }
 
@@ -604,11 +643,12 @@ public enum TestHelper {
     /**
      * Checks if the upstream's Subscription sent through the onSubscribe reports
      * isCancelled properly before and after calling dispose.
+     * @param <T> the input value type
      * @param source the source to test
      */
-    public static void checkDisposed(Flowable<?> source) {
+    public static <T> void checkDisposed(Flowable<T> source) {
         final TestSubscriber<Object> ts = new TestSubscriber<Object>(0L);
-        source.subscribe(new Subscriber<Object>() {
+        source.subscribe(new FlowableSubscriber<Object>() {
             @Override
             public void onSubscribe(Subscription s) {
                 ts.onSubscribe(new BooleanSubscription());
@@ -832,7 +872,7 @@ public enum TestHelper {
     /**
      * Consumer for all base reactive types.
      */
-    enum NoOpConsumer implements Subscriber<Object>, Observer<Object>, MaybeObserver<Object>, SingleObserver<Object>, CompletableObserver {
+    enum NoOpConsumer implements FlowableSubscriber<Object>, Observer<Object>, MaybeObserver<Object>, SingleObserver<Object>, CompletableObserver {
         INSTANCE;
 
         @Override
@@ -2199,7 +2239,7 @@ public enum TestHelper {
 
         final Boolean[] state = { null, null, null, null };
 
-        source.subscribe(new Subscriber<T>() {
+        source.subscribe(new FlowableSubscriber<T>() {
             @Override
             public void onSubscribe(Subscription d) {
                 try {
@@ -2428,7 +2468,7 @@ public enum TestHelper {
                 }
             }
 
-            assertError(errors, 0, TestException.class, "second");
+            assertUndeliverable(errors, 0, TestException.class, "second");
         } catch (AssertionError ex) {
             throw ex;
         } catch (Throwable ex) {
@@ -2587,13 +2627,29 @@ public enum TestHelper {
                 }
             }
 
-            assertError(errors, 0, TestException.class, "second");
+            assertUndeliverable(errors, 0, TestException.class, "second");
         } catch (AssertionError ex) {
             throw ex;
         } catch (Throwable ex) {
             throw new RuntimeException(ex);
         } finally {
             RxJavaPlugins.reset();
+        }
+    }
+
+    public static <T> void checkInvalidParallelSubscribers(ParallelFlowable<T> source) {
+        int n = source.parallelism();
+
+        @SuppressWarnings("unchecked")
+        TestSubscriber<Object>[] tss = new TestSubscriber[n + 1];
+        for (int i = 0; i <= n; i++) {
+            tss[i] = new TestSubscriber<Object>().withTag("" + i);
+        }
+
+        source.subscribe(tss);
+
+        for (int i = 0; i <= n; i++) {
+            tss[i].assertFailure(IllegalArgumentException.class);
         }
     }
 }

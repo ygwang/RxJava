@@ -18,6 +18,7 @@ import static org.junit.Assert.*;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import io.reactivex.annotations.NonNull;
 import org.junit.Test;
 
 import io.reactivex.*;
@@ -233,7 +234,7 @@ public class SchedulerTest {
             Thread.sleep(250);
 
             assertEquals(1, list.size());
-            TestHelper.assertError(list, 0, TestException.class, null);
+            TestHelper.assertUndeliverable(list, 0, TestException.class, null);
 
         } finally {
             RxJavaPlugins.reset();
@@ -248,11 +249,13 @@ public class SchedulerTest {
     @Test
     public void defaultSchedulePeriodicallyDirectRejects() {
         Scheduler s = new Scheduler() {
+            @NonNull
             @Override
             public Worker createWorker() {
                 return new Worker() {
+                    @NonNull
                     @Override
-                    public Disposable schedule(Runnable run, long delay, TimeUnit unit) {
+                    public Disposable schedule(@NonNull Runnable run, long delay, @NonNull TimeUnit unit) {
                         return EmptyDisposable.INSTANCE;
                     }
 

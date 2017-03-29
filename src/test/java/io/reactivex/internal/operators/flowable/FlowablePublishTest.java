@@ -664,7 +664,7 @@ public class FlowablePublishTest {
             .test()
             .assertResult(1);
 
-            TestHelper.assertError(errors, 0, TestException.class);
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }
@@ -678,7 +678,7 @@ public class FlowablePublishTest {
 
             co.connect();
 
-            TestHelper.assertError(errors, 0, TestException.class);
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }
@@ -872,5 +872,26 @@ public class FlowablePublishTest {
         .autoConnect()
         .test(0L)
         .assertFailure(MissingBackpressureException.class);
+    }
+
+    @Test
+    public void delayedUpstreamOnSubscribe() {
+        final Subscriber<?>[] sub = { null };
+
+        new Flowable<Integer>() {
+            @Override
+            protected void subscribeActual(Subscriber<? super Integer> s) {
+                sub[0] = s;
+            }
+        }
+        .publish()
+        .connect()
+        .dispose();
+
+        BooleanSubscription bs = new BooleanSubscription();
+
+        sub[0].onSubscribe(bs);
+
+        assertTrue(bs.isCancelled());
     }
 }

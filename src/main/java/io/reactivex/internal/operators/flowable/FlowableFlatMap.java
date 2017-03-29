@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.*;
 
 import org.reactivestreams.*;
 
+import io.reactivex.*;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.exceptions.*;
 import io.reactivex.functions.Function;
@@ -34,7 +35,7 @@ public final class FlowableFlatMap<T, U> extends AbstractFlowableWithUpstream<T,
     final int maxConcurrency;
     final int bufferSize;
 
-    public FlowableFlatMap(Publisher<T> source,
+    public FlowableFlatMap(Flowable<T> source,
             Function<? super T, ? extends Publisher<? extends U>> mapper,
             boolean delayErrors, int maxConcurrency, int bufferSize) {
         super(source);
@@ -52,13 +53,13 @@ public final class FlowableFlatMap<T, U> extends AbstractFlowableWithUpstream<T,
         source.subscribe(subscribe(s, mapper, delayErrors, maxConcurrency, bufferSize));
     }
 
-    public static <T, U> Subscriber<T> subscribe(Subscriber<? super U> s,
+    public static <T, U> FlowableSubscriber<T> subscribe(Subscriber<? super U> s,
             Function<? super T, ? extends Publisher<? extends U>> mapper,
             boolean delayErrors, int maxConcurrency, int bufferSize) {
         return new MergeSubscriber<T, U>(s, mapper, delayErrors, maxConcurrency, bufferSize);
     }
 
-    static final class MergeSubscriber<T, U> extends AtomicInteger implements Subscription, Subscriber<T> {
+    static final class MergeSubscriber<T, U> extends AtomicInteger implements FlowableSubscriber<T>, Subscription {
 
         private static final long serialVersionUID = -2117620485640801370L;
 
@@ -420,10 +421,12 @@ public final class FlowableFlatMap<T, U> extends AbstractFlowableWithUpstream<T,
 
                 if (d && (svq == null || svq.isEmpty()) && n == 0) {
                     Throwable ex = errs.terminate();
-                    if (ex == null) {
-                        child.onComplete();
-                    } else {
-                        child.onError(ex);
+                    if (ex != ExceptionHelper.TERMINATED) {
+                        if (ex == null) {
+                            child.onComplete();
+                        } else {
+                            child.onError(ex);
+                        }
                     }
                     return;
                 }
@@ -550,17 +553,25 @@ public final class FlowableFlatMap<T, U> extends AbstractFlowableWithUpstream<T,
 
         boolean checkTerminate() {
             if (cancelled) {
-                SimpleQueue<U> q = queue;
-                if (q != null) {
-                    q.clear();
-                }
+                clearScalarQueue();
                 return true;
             }
             if (!delayErrors && errs.get() != null) {
-                actual.onError(errs.terminate());
+                clearScalarQueue();
+                Throwable ex = errs.terminate();
+                if (ex != ExceptionHelper.TERMINATED) {
+                    actual.onError(ex);
+                }
                 return true;
             }
             return false;
+        }
+
+        void clearScalarQueue() {
+            SimpleQueue<U> q = queue;
+            if (q != null) {
+                q.clear();
+            }
         }
 
         void disposeAll() {
@@ -578,10 +589,25 @@ public final class FlowableFlatMap<T, U> extends AbstractFlowableWithUpstream<T,
                 }
             }
         }
+
+        void innerError(InnerSubscriber<T, U> inner, Throwable t) {
+            if (errs.addThrowable(t)) {
+                inner.done = true;
+                if (!delayErrors) {
+                    s.cancel();
+                    for (InnerSubscriber<?, ?> a : subscribers.getAndSet(CANCELLED)) {
+                        a.dispose();
+                    }
+                }
+                drain();
+            } else {
+                RxJavaPlugins.onError(t);
+            }
+        }
     }
 
     static final class InnerSubscriber<T, U> extends AtomicReference<Subscription>
-    implements Subscriber<U>, Disposable {
+    implements FlowableSubscriber<U>, Disposable {
 
         private static final long serialVersionUID = -4606175640614850599L;
         final long id;
@@ -635,12 +661,8 @@ public final class FlowableFlatMap<T, U> extends AbstractFlowableWithUpstream<T,
         }
         @Override
         public void onError(Throwable t) {
-            if (parent.errs.addThrowable(t)) {
-                done = true;
-                parent.drain();
-            } else {
-                RxJavaPlugins.onError(t);
-            }
+            lazySet(SubscriptionHelper.CANCELLED);
+            parent.innerError(this, t);
         }
         @Override
         public void onComplete() {

@@ -17,6 +17,8 @@ import java.util.concurrent.atomic.*;
 
 import org.reactivestreams.*;
 
+import io.reactivex.*;
+import io.reactivex.annotations.*;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.exceptions.Exceptions;
 import io.reactivex.functions.Function;
@@ -33,21 +35,22 @@ import io.reactivex.plugins.RxJavaPlugins;
  * @param <R> the output type
  */
 public final class FlowableWithLatestFromMany<T, R> extends AbstractFlowableWithUpstream<T, R> {
-
+    @Nullable
     final Publisher<?>[] otherArray;
 
+    @Nullable
     final Iterable<? extends Publisher<?>> otherIterable;
 
     final Function<? super Object[], R> combiner;
 
-    public FlowableWithLatestFromMany(Publisher<T> source, Publisher<?>[] otherArray, Function<? super Object[], R> combiner) {
+    public FlowableWithLatestFromMany(@NonNull Flowable<T> source, @NonNull Publisher<?>[] otherArray, Function<? super Object[], R> combiner) {
         super(source);
         this.otherArray = otherArray;
         this.otherIterable = null;
         this.combiner = combiner;
     }
 
-    public FlowableWithLatestFromMany(Publisher<T> source, Iterable<? extends Publisher<?>> otherIterable, Function<? super Object[], R> combiner) {
+    public FlowableWithLatestFromMany(@NonNull Flowable<T> source, @NonNull Iterable<? extends Publisher<?>> otherIterable, @NonNull Function<? super Object[], R> combiner) {
         super(source);
         this.otherArray = null;
         this.otherIterable = otherIterable;
@@ -79,12 +82,7 @@ public final class FlowableWithLatestFromMany<T, R> extends AbstractFlowableWith
         }
 
         if (n == 0) {
-            new FlowableMap<T, R>(source, new Function<T, R>() {
-                @Override
-                public R apply(T t) throws Exception {
-                    return combiner.apply(new Object[] { t });
-                }
-            }).subscribeActual(s);
+            new FlowableMap<T, R>(source, new SingletonArrayFunc()).subscribeActual(s);
             return;
         }
 
@@ -97,7 +95,7 @@ public final class FlowableWithLatestFromMany<T, R> extends AbstractFlowableWith
 
     static final class WithLatestFromSubscriber<T, R>
     extends AtomicInteger
-    implements Subscriber<T>, Subscription {
+    implements FlowableSubscriber<T>, Subscription {
 
         private static final long serialVersionUID = 1577321883966341961L;
 
@@ -245,7 +243,7 @@ public final class FlowableWithLatestFromMany<T, R> extends AbstractFlowableWith
 
     static final class WithLatestInnerSubscriber
     extends AtomicReference<Subscription>
-    implements Subscriber<Object>, Disposable {
+    implements FlowableSubscriber<Object>, Disposable {
 
         private static final long serialVersionUID = 3256684027868224024L;
 
@@ -293,6 +291,13 @@ public final class FlowableWithLatestFromMany<T, R> extends AbstractFlowableWith
         @Override
         public void dispose() {
             SubscriptionHelper.cancel(this);
+        }
+    }
+
+    final class SingletonArrayFunc implements Function<T, R> {
+        @Override
+        public R apply(T t) throws Exception {
+            return combiner.apply(new Object[] { t });
         }
     }
 }

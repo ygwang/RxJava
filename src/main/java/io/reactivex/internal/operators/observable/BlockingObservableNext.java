@@ -18,14 +18,14 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.reactivex.*;
-import io.reactivex.internal.util.ExceptionHelper;
+import io.reactivex.internal.util.*;
 import io.reactivex.observers.DisposableObserver;
 import io.reactivex.plugins.RxJavaPlugins;
 
 /**
  * Returns an Iterable that blocks until the Observable emits another item, then returns that item.
  * <p>
- * <img width="640" src="https://github.com/ReactiveX/RxJava/wiki/images/rx-operators/B.next.png" alt="">
+ * <img width="640" height="490" src="https://github.com/ReactiveX/RxJava/wiki/images/rx-operators/B.next.png" alt="">
  * 
  * @param <T> the value type
  */
@@ -162,6 +162,7 @@ public final class BlockingObservableNext<T> implements Iterable<T> {
 
         public Notification<T> takeNext() throws InterruptedException {
             setWaiting();
+            BlockingHelper.verifyNonBlocking();
             return buf.take();
         }
         void setWaiting() {

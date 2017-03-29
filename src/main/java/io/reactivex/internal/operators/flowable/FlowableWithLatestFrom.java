@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.*;
 
 import org.reactivestreams.*;
 
+import io.reactivex.*;
 import io.reactivex.exceptions.Exceptions;
 import io.reactivex.functions.BiFunction;
 import io.reactivex.internal.functions.ObjectHelper;
@@ -26,7 +27,7 @@ import io.reactivex.subscribers.SerializedSubscriber;
 public final class FlowableWithLatestFrom<T, U, R> extends AbstractFlowableWithUpstream<T, R> {
     final BiFunction<? super T, ? super U, ? extends R> combiner;
     final Publisher<? extends U> other;
-    public FlowableWithLatestFrom(Publisher<T> source, BiFunction<? super T, ? super U, ? extends R> combiner, Publisher<? extends U> other) {
+    public FlowableWithLatestFrom(Flowable<T> source, BiFunction<? super T, ? super U, ? extends R> combiner, Publisher<? extends U> other) {
         super(source);
         this.combiner = combiner;
         this.other = other;
@@ -39,34 +40,12 @@ public final class FlowableWithLatestFrom<T, U, R> extends AbstractFlowableWithU
 
         serial.onSubscribe(wlf);
 
-        other.subscribe(new Subscriber<U>() {
-            @Override
-            public void onSubscribe(Subscription s) {
-                if (wlf.setOther(s)) {
-                    s.request(Long.MAX_VALUE);
-                }
-            }
-
-            @Override
-            public void onNext(U t) {
-                wlf.lazySet(t);
-            }
-
-            @Override
-            public void onError(Throwable t) {
-                wlf.otherError(t);
-            }
-
-            @Override
-            public void onComplete() {
-                // nothing to do, the wlf will complete on its own pace
-            }
-        });
+        other.subscribe(new FlowableWithLatestSubscriber(wlf));
 
         source.subscribe(wlf);
     }
 
-    static final class WithLatestFromSubscriber<T, U, R> extends AtomicReference<U> implements Subscriber<T>, Subscription {
+    static final class WithLatestFromSubscriber<T, U, R> extends AtomicReference<U> implements FlowableSubscriber<T>, Subscription {
 
         private static final long serialVersionUID = -312246233408980075L;
 
@@ -135,6 +114,36 @@ public final class FlowableWithLatestFrom<T, U, R> extends AbstractFlowableWithU
         public void otherError(Throwable e) {
             SubscriptionHelper.cancel(s);
             actual.onError(e);
+        }
+    }
+
+    final class FlowableWithLatestSubscriber implements FlowableSubscriber<U> {
+        private final WithLatestFromSubscriber<T, U, R> wlf;
+
+        FlowableWithLatestSubscriber(WithLatestFromSubscriber<T, U, R> wlf) {
+            this.wlf = wlf;
+        }
+
+        @Override
+        public void onSubscribe(Subscription s) {
+            if (wlf.setOther(s)) {
+                s.request(Long.MAX_VALUE);
+            }
+        }
+
+        @Override
+        public void onNext(U t) {
+            wlf.lazySet(t);
+        }
+
+        @Override
+        public void onError(Throwable t) {
+            wlf.otherError(t);
+        }
+
+        @Override
+        public void onComplete() {
+            // nothing to do, the wlf will complete on its own pace
         }
     }
 }

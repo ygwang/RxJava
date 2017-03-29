@@ -21,6 +21,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 
+import io.reactivex.annotations.Nullable;
 import org.junit.Test;
 import org.mockito.InOrder;
 
@@ -509,7 +510,7 @@ public class ObservableObserveOnTest {
 
             to.assertResult();
 
-            TestHelper.assertError(errors, 0, TestException.class);
+            TestHelper.assertUndeliverable(errors, 0, TestException.class);
         } finally {
             RxJavaPlugins.reset();
         }
@@ -692,6 +693,7 @@ public class ObservableObserveOnTest {
                         return false;
                     }
 
+                    @Nullable
                     @Override
                     public Integer poll() throws Exception {
                         throw new TestException();

@@ -31,15 +31,7 @@ public final class ObservableTimeoutTimed<T> extends AbstractObservableWithUpstr
     final ObservableSource<? extends T> other;
 
 
-    static final Disposable NEW_TIMER = new Disposable() {
-        @Override
-        public void dispose() { }
-
-        @Override
-        public boolean isDisposed() {
-            return true;
-        }
-    };
+    static final Disposable NEW_TIMER = new EmptyDisposable();
 
     public ObservableTimeoutTimed(ObservableSource<T> source,
             long timeout, TimeUnit unit, Scheduler scheduler, ObservableSource<? extends T> other) {
@@ -124,20 +116,7 @@ public final class ObservableTimeoutTimed<T> extends AbstractObservableWithUpstr
             }
 
             if (compareAndSet(d, NEW_TIMER)) {
-                d = worker.schedule(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (idx == index) {
-                            done = true;
-                            s.dispose();
-                            DisposableHelper.dispose(TimeoutTimedOtherObserver.this);
-
-                            subscribeNext();
-
-                            worker.dispose();
-                        }
-                    }
-                }, timeout, unit);
+                d = worker.schedule(new SubscribeNext(idx), timeout, unit);
 
                 DisposableHelper.replace(this, d);
             }
@@ -154,9 +133,8 @@ public final class ObservableTimeoutTimed<T> extends AbstractObservableWithUpstr
                 return;
             }
             done = true;
-            worker.dispose();
-            DisposableHelper.dispose(this);
             arbiter.onError(t, s);
+            worker.dispose();
         }
 
         @Override
@@ -165,21 +143,40 @@ public final class ObservableTimeoutTimed<T> extends AbstractObservableWithUpstr
                 return;
             }
             done = true;
-            worker.dispose();
-            DisposableHelper.dispose(this);
             arbiter.onComplete(s);
+            worker.dispose();
         }
 
         @Override
         public void dispose() {
-            worker.dispose();
-            DisposableHelper.dispose(this);
             s.dispose();
+            worker.dispose();
         }
 
         @Override
         public boolean isDisposed() {
-            return DisposableHelper.isDisposed(get());
+            return worker.isDisposed();
+        }
+
+        final class SubscribeNext implements Runnable {
+            private final long idx;
+
+            SubscribeNext(long idx) {
+                this.idx = idx;
+            }
+
+            @Override
+            public void run() {
+                if (idx == index) {
+                    done = true;
+                    s.dispose();
+                    DisposableHelper.dispose(TimeoutTimedOtherObserver.this);
+
+                    subscribeNext();
+
+                    worker.dispose();
+                }
+            }
         }
     }
 
@@ -236,20 +233,7 @@ public final class ObservableTimeoutTimed<T> extends AbstractObservableWithUpstr
             }
 
             if (compareAndSet(d, NEW_TIMER)) {
-                d = worker.schedule(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (idx == index) {
-                            done = true;
-                            DisposableHelper.dispose(TimeoutTimedObserver.this);
-                            s.dispose();
-
-                            actual.onError(new TimeoutException());
-
-                            worker.dispose();
-                        }
-                    }
-                }, timeout, unit);
+                d = worker.schedule(new TimeoutTask(idx), timeout, unit);
 
                 DisposableHelper.replace(this, d);
             }
@@ -262,9 +246,9 @@ public final class ObservableTimeoutTimed<T> extends AbstractObservableWithUpstr
                 return;
             }
             done = true;
-            dispose();
 
             actual.onError(t);
+            dispose();
         }
 
         @Override
@@ -273,21 +257,51 @@ public final class ObservableTimeoutTimed<T> extends AbstractObservableWithUpstr
                 return;
             }
             done = true;
-            dispose();
 
             actual.onComplete();
+            dispose();
         }
 
         @Override
         public void dispose() {
-            worker.dispose();
-            DisposableHelper.dispose(this);
             s.dispose();
+            worker.dispose();
         }
 
         @Override
         public boolean isDisposed() {
-            return DisposableHelper.isDisposed(get());
+            return worker.isDisposed();
+        }
+
+        final class TimeoutTask implements Runnable {
+            private final long idx;
+
+            TimeoutTask(long idx) {
+                this.idx = idx;
+            }
+
+            @Override
+            public void run() {
+                if (idx == index) {
+                    done = true;
+                    s.dispose();
+                    DisposableHelper.dispose(TimeoutTimedObserver.this);
+
+                    actual.onError(new TimeoutException());
+
+                    worker.dispose();
+                }
+            }
+        }
+    }
+
+    static final class EmptyDisposable implements Disposable {
+        @Override
+        public void dispose() { }
+
+        @Override
+        public boolean isDisposed() {
+            return true;
         }
     }
 }
